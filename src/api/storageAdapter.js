@@ -146,5 +146,6 @@ export const storageAdapter = {
     Session: makeAdapterEntity('Session'),
     Pricing: makeAdapterEntity('Pricing'),
     Player: makeAdapterEntity('Player'),
+    Expense: makeAdapterEntity('Expense'),
   },
 };

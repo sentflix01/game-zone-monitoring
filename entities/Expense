@@ -1,0 +1,16 @@
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "description": { "type": "string", "title": "Description" },
+    "amount": { "type": "number", "title": "Amount" },
+    "category": {
+      "type": "string",
+      "title": "Category",
+      "enum": ["snacks", "repairs", "utilities", "rent", "salaries", "other"],
+      "default": "other"
+    },
+    "date": { "type": "string", "format": "date", "title": "Date" }
+  },
+  "required": ["amount", "category", "date"]
+}

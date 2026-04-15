@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import InstallPWA from "./InstallPWA";
-import { LayoutDashboard, Monitor, Clock, Settings, BarChart2, Users } from "lucide-react";
+import { LayoutDashboard, Monitor, Clock, Settings, BarChart2, Users, Receipt, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -8,6 +8,8 @@ const navItems = [
   { path: "/consoles", label: "Consoles", icon: Monitor },
   { path: "/sessions", label: "Sessions", icon: Clock },
   { path: "/players", label: "Players", icon: Users },
+  { path: "/expenses", label: "Expenses", icon: Receipt },
+  { path: "/analytics", label: "Analytics", icon: TrendingUp },
   { path: "/report", label: "Report", icon: BarChart2 },
   { path: "/settings", label: "Settings", icon: Settings },
 ];

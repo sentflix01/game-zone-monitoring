@@ -87,5 +87,6 @@ export const localClient = {
     Session: makeEntity('Session'),
     Pricing: makeEntity('Pricing'),
     Player: makeEntity('Player'),
+    Expense: makeEntity('Expense'),
   },
 };
