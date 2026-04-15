@@ -1,0 +1,37 @@
+{
+  "name": "Console",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Console Name"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "PS5",
+        "PS4"
+      ],
+      "title": "Console Type"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "available",
+        "occupied",
+        "maintenance"
+      ],
+      "title": "Status",
+      "default": "available"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "status"
+  ]
+}

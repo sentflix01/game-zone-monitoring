@@ -1,0 +1,46 @@
+{
+  "name": "Player",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Player Name"
+    },
+    "total_sessions": {
+      "type": "number",
+      "title": "Total Sessions",
+      "default": 0
+    },
+    "total_minutes": {
+      "type": "number",
+      "title": "Total Minutes Played",
+      "default": 0
+    },
+    "total_spend": {
+      "type": "number",
+      "title": "Total Amount Spent",
+      "default": 0
+    },
+    "ps5_sessions": {
+      "type": "number",
+      "title": "PS5 Sessions",
+      "default": 0
+    },
+    "ps4_sessions": {
+      "type": "number",
+      "title": "PS4 Sessions",
+      "default": 0
+    },
+    "favourite_console": {
+      "type": "string",
+      "title": "Favourite Console Type",
+      "enum": ["PS5", "PS4"]
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Seen"
+    }
+  },
+  "required": ["name"]
+}

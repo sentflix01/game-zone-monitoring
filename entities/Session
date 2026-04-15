@@ -1,0 +1,56 @@
+{
+  "name": "Session",
+  "type": "object",
+  "properties": {
+    "console_id": {
+      "type": "string",
+      "title": "Console ID"
+    },
+    "console_name": {
+      "type": "string",
+      "title": "Console Name"
+    },
+    "console_type": {
+      "type": "string",
+      "title": "Console Type"
+    },
+    "player_name": {
+      "type": "string",
+      "title": "Player Name"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Start Time"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time",
+      "title": "End Time"
+    },
+    "duration_minutes": {
+      "type": "number",
+      "title": "Duration (minutes)"
+    },
+    "amount_charged": {
+      "type": "number",
+      "title": "Amount Charged"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed"
+      ],
+      "title": "Status",
+      "default": "active"
+    }
+  },
+  "required": [
+    "console_id",
+    "console_name",
+    "console_type",
+    "start_time",
+    "status"
+  ]
+}

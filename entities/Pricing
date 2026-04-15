@@ -1,0 +1,27 @@
+{
+  "name": "Pricing",
+  "type": "object",
+  "properties": {
+    "console_type": {
+      "type": "string",
+      "enum": [
+        "PS5",
+        "PS4"
+      ],
+      "title": "Console Type"
+    },
+    "hourly_rate": {
+      "type": "number",
+      "title": "Hourly Rate"
+    },
+    "currency": {
+      "type": "string",
+      "title": "Currency",
+      "default": "USD"
+    }
+  },
+  "required": [
+    "console_type",
+    "hourly_rate"
+  ]
+}

@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+
+# Capacitor generated (keep android/ and ios/ source, ignore build artifacts)
+android/.gradle/
+android/app/build/
+ios/App/Pods/
+ios/App/App.xcworkspace/
+
+# Electron build cache
+build/icons/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

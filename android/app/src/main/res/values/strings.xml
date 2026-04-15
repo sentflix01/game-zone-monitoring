@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Game Zone</string>
+    <string name="title_activity_main">Game Zone</string>
+    <string name="package_name">com.gamezone.app</string>
+    <string name="custom_url_scheme">com.gamezone.app</string>
+</resources>
