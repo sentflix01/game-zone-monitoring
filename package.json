@@ -12,6 +12,8 @@
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "package:electron": "npm run build:electron && electron-builder",
     "build:android": "vite build && npx cap sync android",
+    "build:android-apk": "vite build && npx cap sync android && cd android && ./gradlew assembleDebug",
+    "build:android-aab": "vite build && npx cap sync android && cd android && ./gradlew bundleRelease",
     "build:ios": "vite build && npx cap sync ios",
     "icons": "node scripts/gen-icons.mjs",
     "lint": "eslint . --quiet",
@@ -39,8 +41,14 @@
       "icon": "build/icons/icon.png"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "build/icons/icon.png"
+      "target": ["AppImage", "deb"],
+      "icon": "build/icons/icon.png",
+      "category": "Utility"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sentflix01",
+      "repo": "game-zone-monitoring"
     }
   },
   "dependencies": {
@@ -92,7 +100,7 @@
     "input-otp": "^1.4.2",
     "jspdf": "^4.0.0",
     "lodash": "^4.17.21",
-    "lucide-react": "^0.475.0",
+    "lucide-react": "0.454.0",
     "moment": "^2.30.1",
     "next-themes": "^0.4.4",
     "react": "^18.2.0",
@@ -105,7 +113,7 @@
     "react-quill": "^2.0.0",
     "react-resizable-panels": "^2.1.7",
     "react-router-dom": "^6.26.0",
-    "recharts": "^2.15.4",
+    "recharts": "2.13.3",
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",

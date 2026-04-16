@@ -12,7 +12,7 @@
   - [x] 1.7 Update src/pages/Report.jsx — replace `base44` import with `storageAdapter`
   - [x] 1.8 Update src/pages/Settings.jsx — replace `base44` import with `storageAdapter`
 
-- [-] 2. Fix PageNotFound.jsx — remove base44 auth dependency
+- [x] 2. Fix PageNotFound.jsx — remove base44 auth dependency
   - [x] 2.1 Remove `base44` import and `@tanstack/react-query` useQuery call from src/lib/PageNotFound.jsx
   - [x] 2.2 Remove the conditional admin note block that depended on auth state
 
