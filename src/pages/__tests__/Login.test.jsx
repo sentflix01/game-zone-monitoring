@@ -18,11 +18,12 @@ vi.mock('@/lib/firebase', () => ({
 
 // Mock firebase/auth
 vi.mock('firebase/auth', () => ({
-  RecaptchaVerifier: vi.fn(),
-  signInWithPhoneNumber: vi.fn(),
   GoogleAuthProvider: vi.fn().mockImplementation(() => ({})),
   signInWithPopup: vi.fn(),
   signInWithCredential: vi.fn(),
+  sendSignInLinkToEmail: vi.fn(),
+  isSignInWithEmailLink: vi.fn().mockReturnValue(false),
+  signInWithEmailLink: vi.fn(),
 }));
 
 // Mock i18n
@@ -87,7 +88,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Login page unit tests', () => {
-  it('renders phone input and send code button when unauthenticated', () => {
+  it('renders email input and "Send Sign-in Link" button when unauthenticated', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -104,7 +105,7 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
-    expect(getByPlaceholderText('auth.login.phonePlaceholder')).toBeTruthy();
+    expect(getByPlaceholderText('auth.login.emailPlaceholder')).toBeTruthy();
     expect(getByText('auth.otp.sendButton')).toBeTruthy();
     expect(getByText('auth.login.googleButton')).toBeTruthy();
   });

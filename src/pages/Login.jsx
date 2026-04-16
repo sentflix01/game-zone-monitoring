@@ -1,28 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithCredential,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
 } from 'firebase/auth';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { useTranslation } from '@/i18n/I18nContext';
 import { auth } from '@/lib/firebase';
-import { Phone, Chrome, ArrowLeft } from 'lucide-react';
+import { Mail, Chrome, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
+const EMAIL_KEY = 'gamezone_email_signin';
+
 function getFirebaseErrorKey(code) {
   switch (code) {
-    case 'auth/invalid-phone-number':
-      return 'auth.error.invalidPhone';
-    case 'auth/invalid-verification-code':
-      return 'auth.error.invalidOtp';
-    case 'auth/code-expired':
-      return 'auth.error.otpExpired';
+    case 'auth/invalid-email':
+      return 'auth.error.invalidEmail';
+    case 'auth/too-many-requests':
+      return 'auth.error.tooManyRequests';
     case 'auth/popup-closed-by-user':
       return null;
     case 'auth/network-request-failed':
@@ -37,35 +38,48 @@ export default function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState('phone');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [view, setView] = useState('login');
+  const [email, setEmail] = useState('');
+  const [confirmEmail, setConfirmEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
   const isOffline = !navigator.onLine;
+
+  useEffect(() => {
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      const saved = localStorage.getItem(EMAIL_KEY);
+      if (saved) {
+        signInWithEmailLink(auth, saved, window.location.href)
+          .then(() => {
+            localStorage.removeItem(EMAIL_KEY);
+            window.history.replaceState(null, '', window.location.pathname);
+            navigate('/');
+          })
+          .catch((err) => {
+            const key = getFirebaseErrorKey(err.code) || 'auth.error.otpLinkInvalid';
+            toast.error(t(key));
+          });
+      } else {
+        setView('confirm');
+      }
+    }
+  }, []);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
-  async function handleSendCode(e) {
+  async function handleSendLink(e) {
     e.preventDefault();
     setLoading(true);
     try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
-      }
-      const result = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
-      setConfirmationResult(result);
-      setStep('otp');
+      await sendSignInLinkToEmail(auth, email, {
+        url: window.location.href,
+        handleCodeInApp: true,
+      });
+      localStorage.setItem(EMAIL_KEY, email);
+      setView('sent');
     } catch (err) {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
-      }
       const key = getFirebaseErrorKey(err.code);
       if (key) toast.error(t(key));
     } finally {
@@ -73,24 +87,18 @@ export default function Login() {
     }
   }
 
-  async function handleVerifyOtp(e) {
+  async function handleConfirmLink(e) {
     e.preventDefault();
-    if (!confirmationResult) return;
     setLoading(true);
     try {
-      await confirmationResult.confirm(otp);
+      await signInWithEmailLink(auth, confirmEmail, window.location.href);
       navigate('/');
     } catch (err) {
-      const key = getFirebaseErrorKey(err.code);
-      if (key) toast.error(t(key));
+      const key = getFirebaseErrorKey(err.code) || 'auth.error.otpLinkInvalid';
+      toast.error(t(key));
     } finally {
       setLoading(false);
     }
-  }
-
-  function handleBack() {
-    setStep('phone');
-    setOtp('');
   }
 
   async function handleGoogleSignIn() {
@@ -124,9 +132,7 @@ export default function Login() {
           {t('auth.login.title')}
         </h1>
         <p className="text-game-muted mt-1 text-sm">
-          {step === 'phone'
-            ? t('auth.login.subtitle')
-            : t('auth.otp.sentSubtitle').replace('{phone}', phone)}
+          {t('auth.login.subtitle')}
         </p>
       </div>
 
@@ -137,18 +143,18 @@ export default function Login() {
       )}
 
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6">
-        {step === 'phone' && (
+        {view === 'login' && (
           <>
-            <form onSubmit={handleSendCode} className="space-y-4" data-testid="login-form">
+            <form onSubmit={handleSendLink} className="space-y-4" data-testid="login-form">
               <div>
                 <label className="block text-sm text-game-muted mb-1">
-                  {t('auth.login.phoneLabel')}
+                  {t('auth.login.emailLabel')}
                 </label>
                 <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder={t('auth.login.phonePlaceholder')}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('auth.login.emailPlaceholder')}
                   required
                   disabled={loading || isOffline}
                   className="bg-game-bg border-game-border text-white placeholder:text-game-muted"
@@ -159,7 +165,7 @@ export default function Login() {
                 disabled={loading || isOffline}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <Phone className="w-4 h-4 mr-2" />
+                <Mail className="w-4 h-4 mr-2" />
                 {t('auth.otp.sendButton')}
               </Button>
             </form>
@@ -183,45 +189,61 @@ export default function Login() {
           </>
         )}
 
-        {step === 'otp' && (
-          <form onSubmit={handleVerifyOtp} className="space-y-4" data-testid="otp-form">
+        {view === 'sent' && (
+          <div className="text-center space-y-4">
+            <div className="w-14 h-14 bg-green-900/40 rounded-full flex items-center justify-center mx-auto">
+              <Mail className="w-7 h-7 text-green-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">
+              {t('auth.otp.sentTitle')}
+            </h2>
+            <p className="text-game-muted text-sm">
+              {t('auth.otp.sentBody').replace('{email}', email)}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setView('login')}
+              className="w-full text-game-muted hover:text-white"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('auth.login.backToLogin')}
+            </Button>
+          </div>
+        )}
+
+        {view === 'confirm' && (
+          <form onSubmit={handleConfirmLink} className="space-y-4" data-testid="confirm-form">
+            <h2 className="text-lg font-semibold text-white">
+              {t('auth.otp.confirmTitle')}
+            </h2>
+            <p className="text-game-muted text-sm">
+              {t('auth.otp.confirmSubtitle')}
+            </p>
             <div>
               <label className="block text-sm text-game-muted mb-1">
-                {t('auth.otp.otpLabel')}
+                {t('auth.otp.confirmEmailLabel')}
               </label>
               <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                placeholder={t('auth.otp.otpPlaceholder')}
+                type="email"
+                value={confirmEmail}
+                onChange={(e) => setConfirmEmail(e.target.value)}
+                placeholder={t('auth.login.emailPlaceholder')}
                 required
                 disabled={loading}
-                className="bg-game-bg border-game-border text-white placeholder:text-game-muted tracking-widest text-center text-lg"
+                className="bg-game-bg border-game-border text-white placeholder:text-game-muted"
               />
             </div>
             <Button
               type="submit"
-              disabled={loading || otp.length !== 6}
+              disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {t('auth.otp.verifyButton')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleBack}
-              className="w-full text-game-muted hover:text-white"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              {t('auth.login.backToPhone')}
+              {t('auth.otp.confirmButton')}
             </Button>
           </form>
         )}
       </div>
-
-      <div id="recaptcha-container" />
     </div>
   );
 }
