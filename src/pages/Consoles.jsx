@@ -97,7 +97,7 @@ export default function Consoles() {
     if (!active) return;
     const durationMin = Math.floor((Date.now() - new Date(active.start_time)) / 60000);
     const rate = pricing.find((p) => p.console_type === c.type);
-    const amount = rate ? (durationMin / 60) * rate.hourly_rate : 0;
+    const amount = rate ? rate.hourly_rate : 0;
     const charged = parseFloat(amount.toFixed(2));
 
     await storageAdapter.entities.Session.update(active.id, {
