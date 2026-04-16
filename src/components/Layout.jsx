@@ -1,24 +1,28 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import InstallPWA from "./InstallPWA";
 import LanguageToggle from "./LanguageToggle";
-import { LayoutDashboard, Monitor, Clock, Settings, BarChart2, Users, Receipt, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Monitor, Clock, Settings, BarChart2, Users, Receipt, TrendingUp, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/I18nContext";
+import { useAuth } from "@/lib/AuthContext";
 
 const navDefs = [
-  { path: "/",          key: "nav.dashboard", icon: LayoutDashboard },
-  { path: "/consoles",  key: "nav.consoles",  icon: Monitor },
-  { path: "/sessions",  key: "nav.sessions",  icon: Clock },
-  { path: "/players",   key: "nav.players",   icon: Users },
-  { path: "/expenses",  key: "nav.expenses",  icon: Receipt },
-  { path: "/analytics", key: "nav.analytics", icon: TrendingUp },
-  { path: "/report",    key: "nav.report",    icon: BarChart2 },
-  { path: "/settings",  key: "nav.settings",  icon: Settings },
+  { path: "/",          key: "nav.dashboard", icon: LayoutDashboard, adminOnly: false },
+  { path: "/consoles",  key: "nav.consoles",  icon: Monitor,         adminOnly: false },
+  { path: "/sessions",  key: "nav.sessions",  icon: Clock,           adminOnly: false },
+  { path: "/players",   key: "nav.players",   icon: Users,           adminOnly: false },
+  { path: "/expenses",  key: "nav.expenses",  icon: Receipt,         adminOnly: true  },
+  { path: "/analytics", key: "nav.analytics", icon: TrendingUp,      adminOnly: true  },
+  { path: "/report",    key: "nav.report",    icon: BarChart2,       adminOnly: false },
+  { path: "/settings",  key: "nav.settings",  icon: Settings,        adminOnly: false },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const { t } = useTranslation();
+  const { role, logout } = useAuth();
+
+  const visibleNav = role === 'admin' ? navDefs : navDefs.filter(n => !n.adminOnly);
 
   return (
     <div className="min-h-screen bg-game-bg flex flex-col">
@@ -32,13 +36,20 @@ export default function Layout() {
           <p className="text-game-muted text-xs">{t('app.subtitle')}</p>
         </div>
         <LanguageToggle />
+        <button
+          onClick={() => logout()}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-game-muted hover:text-white hover:bg-white/5 transition-all"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="hidden sm:inline">{t('auth.logout')}</span>
+        </button>
       </header>
 
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar (desktop) */}
         <aside className="hidden md:flex flex-col w-56 border-r border-game-border bg-game-surface py-6 gap-1 shrink-0 overflow-y-auto">
-          {navDefs.map(({ path, key, icon: Icon }) => (
+          {visibleNav.map(({ path, key, icon: Icon }) => (
             <Link
               key={path}
               to={path}
@@ -65,7 +76,7 @@ export default function Layout() {
 
       {/* Bottom nav (mobile) */}
       <nav className="md:hidden border-t border-game-border bg-game-surface flex overflow-x-auto">
-        {navDefs.map(({ path, key, icon: Icon }) => (
+        {visibleNav.map(({ path, key, icon: Icon }) => (
           <Link
             key={path}
             to={path}

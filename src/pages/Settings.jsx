@@ -6,10 +6,14 @@ import { toast } from "sonner";
 import { DollarSign, RotateCcw } from "lucide-react";
 import { useTranslation } from "@/i18n/I18nContext";
 import { useTour } from "@/contexts/TourContext";
+import RoleGuard from "@/components/RoleGuard";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Settings() {
   const { t } = useTranslation();
   const { restartTour } = useTour();
+  const { setRole } = useAuth();
+  const [promoteUid, setPromoteUid] = useState("");
   const [pricing, setPricing] = useState([]);
   const [rates, setRates] = useState({ PS5: "", PS4: "" });
   const [currency, setCurrency] = useState("USD");
@@ -52,7 +56,8 @@ export default function Settings() {
         <p className="text-game-muted text-sm mt-1">{t('settings.subtitle')}</p>
       </div>
 
-      <div data-tour="pricing-form" className="bg-game-surface border border-game-border rounded-xl p-6 space-y-5">
+      <RoleGuard role="admin">
+        <div data-tour="pricing-form" className="bg-game-surface border border-game-border rounded-xl p-6 space-y-5">
         <h3 className="text-white font-semibold flex items-center gap-2">
           <DollarSign className="w-4 h-4 text-yellow-400" /> {t('settings.rates.title')}
         </h3>
@@ -89,6 +94,7 @@ export default function Settings() {
           {t('settings.saveButton')}
         </Button>
       </div>
+      </RoleGuard>
 
       <div className="bg-game-surface border border-game-border rounded-xl p-6">
         <h3 className="text-white font-semibold mb-2">{t('settings.currentRates.title')}</h3>
@@ -103,6 +109,27 @@ export default function Settings() {
           </div>
         ))}
       </div>
+
+      <RoleGuard role="admin">
+        <div className="bg-game-surface border border-game-border rounded-xl p-6 space-y-4">
+          <h3 className="text-white font-semibold">{t('auth.settings.promoteTitle')}</h3>
+          <div>
+            <label className="text-game-muted text-sm mb-1.5 block">{t('auth.settings.promoteLabel')}</label>
+            <Input
+              value={promoteUid}
+              onChange={(e) => setPromoteUid(e.target.value)}
+              placeholder="User UID"
+              className="bg-game-bg border-game-border text-white"
+            />
+          </div>
+          <Button
+            onClick={() => { if (promoteUid.trim()) { setRole(promoteUid.trim(), 'admin'); toast.success(t('auth.settings.promoteButton')); setPromoteUid(''); } }}
+            className="bg-purple-600 hover:bg-purple-500 text-white"
+          >
+            {t('auth.settings.promoteButton')}
+          </Button>
+        </div>
+      </RoleGuard>
 
       <div data-tour="restart-tour" className="bg-game-surface border border-game-border rounded-xl p-6 space-y-3">
         <h3 className="text-white font-semibold">{t('settings.tour.title')}</h3>

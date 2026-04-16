@@ -6,6 +6,9 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider } from '@/lib/AuthContext';
 import { I18nProvider } from '@/i18n/I18nContext';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Consoles from './pages/Consoles';
 import Sessions from './pages/Sessions';
@@ -27,15 +30,20 @@ function AppRoutes() {
   return (
     <TourProvider>
       <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/consoles" element={<Consoles />} />
-          <Route path="/sessions" element={<Sessions />} />
-          <Route path="/players" element={<Players />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/report" element={<Report />} />
+        <Route path="/login" element={<Login />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/consoles" element={<Consoles />} />
+            <Route path="/sessions" element={<Sessions />} />
+            <Route path="/players" element={<Players />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/report" element={<Report />} />
+            <Route element={<AdminRoute />}>
+              <Route path="/expenses" element={<Expenses />} />
+              <Route path="/analytics" element={<Analytics />} />
+            </Route>
+          </Route>
         </Route>
         <Route path="*" element={<PageNotFound />} />
       </Routes>

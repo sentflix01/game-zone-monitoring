@@ -1,39 +1,59 @@
-**Welcome to your Base44 project** 
+# Game Zone — PS4/PS5 Monitoring App
 
-**About**
+A cross-platform app for managing a game zone business. Track consoles, sessions, players, expenses, and analytics. Supports web (PWA), Android, iOS, and Electron.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+## Tech Stack
 
-This project contains everything you need to run your app locally.
+- React + Vite
+- Firebase Authentication (email link OTP + Google OAuth)
+- Capacitor (Android / iOS)
+- Tailwind CSS + shadcn/ui
+- localStorage / Capacitor Preferences (data storage)
 
-**Edit the code in your local development environment**
+## Getting Started
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+1. Clone the repo
+2. Install dependencies: `npm install`
+3. Copy `.env.example` to `.env` and fill in your Firebase config
+4. Run: `npm run dev`
 
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
+## Environment Variables
 
 ```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+# Comma-separated Firebase UIDs that get admin role on first login
+VITE_ADMIN_UIDS=
 ```
 
-Run the app: `npm run dev`
+## Authentication
 
-**Publish your changes**
+Users log in via:
+- **Email link (OTP)** — enter email, receive a magic link, click to sign in
+- **Google OAuth** — one-click sign in with Google account
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+## Roles
 
-**Docs & Support**
+- `admin` — full access (financial data, expenses, analytics, console/player management)
+- `user` — operational access (start/end sessions, view consoles and players)
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+Admin UIDs are set via `VITE_ADMIN_UIDS` in `.env`. The first user whose UID matches gets admin role automatically on first login.
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+## Build
+
+```bash
+npm run build          # web
+npx cap sync           # sync to Android/iOS
+npx cap open android   # open in Android Studio
+npx cap open ios       # open in Xcode
+```
+
+## Tests
+
+```bash
+npx vitest run
+```

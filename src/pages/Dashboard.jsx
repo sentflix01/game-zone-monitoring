@@ -3,6 +3,7 @@ import { storageAdapter } from "@/api/storageAdapter";
 import { useTranslation } from "@/i18n/I18nContext";
 import { Monitor, Clock, DollarSign, Zap, Download, CheckCircle, TrendingUp, Receipt } from "lucide-react";
 import { Link } from "react-router-dom";
+import RoleGuard from "@/components/RoleGuard";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { subDays } from "date-fns";
 
@@ -61,7 +62,7 @@ export default function Dashboard() {
   const sevenDaysAgo = subDays(new Date(), 7);
   const recentSessions = sessions.filter((s) => s.status === "completed" && new Date(s.start_time) >= sevenDaysAgo);
   const hourlyMap = {};
-  for (let h = 0; h < 24; h++) hourlyMap[h] = { hour: `${h}:00`, PS5: 0, PS4: 0 };
+  for (let h = 0; h < 24; h++) hourlyMap[h] = { hour: h + ":00", PS5: 0, PS4: 0 };
   recentSessions.forEach((s) => {
     const h = new Date(s.start_time).getHours();
     if (s.console_type === "PS5") hourlyMap[h].PS5 += 1;
@@ -70,12 +71,12 @@ export default function Dashboard() {
   const hourlyData = Object.values(hourlyMap).filter((h) => h.PS5 > 0 || h.PS4 > 0);
   const peakHour = hourlyData.reduce((best, h) => (h.PS5 + h.PS4 > (best?.PS5 + best?.PS4 || 0) ? h : best), null);
 
-  const stats = [
-    { labelKey: 'dashboard.stat.available', value: availableConsoles, icon: Monitor, color: "text-green-400", bg: "bg-green-400/10 border-green-500/20" },
-    { labelKey: 'dashboard.stat.inUse', value: occupiedConsoles, icon: Zap, color: "text-blue-400", bg: "bg-blue-400/10 border-blue-500/20" },
-    { labelKey: 'dashboard.stat.activeSessions', value: activeSessions.length, icon: Clock, color: "text-purple-400", bg: "bg-purple-400/10 border-purple-500/20" },
-    { labelKey: 'dashboard.stat.todayEarnings', value: `$${todayEarnings.toFixed(2)}`, icon: DollarSign, color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-500/20" },
+  const publicStats = [
+    { labelKey: "dashboard.stat.available", value: availableConsoles, icon: Monitor, color: "text-green-400", bg: "bg-green-400/10 border-green-500/20" },
+    { labelKey: "dashboard.stat.inUse", value: occupiedConsoles, icon: Zap, color: "text-blue-400", bg: "bg-blue-400/10 border-blue-500/20" },
+    { labelKey: "dashboard.stat.activeSessions", value: activeSessions.length, icon: Clock, color: "text-purple-400", bg: "bg-purple-400/10 border-purple-500/20" },
   ];
+  const earningsStat = { labelKey: "dashboard.stat.todayEarnings", value: todayEarnings.toFixed(2), icon: DollarSign, color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-500/20" };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -86,91 +87,98 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white">{t('dashboard.title')}</h2>
-        <p className="text-game-muted text-sm mt-1">{t('dashboard.subtitle')}</p>
+        <h2 className="text-2xl font-bold text-white">{t("dashboard.title")}</h2>
+        <p className="text-game-muted text-sm mt-1">{t("dashboard.subtitle")}</p>
       </div>
 
-      {/* Install App Banner */}
       {!isInstalled && (
         <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3 flex-wrap">
           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-sm">PS</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold text-sm">{t('dashboard.install.title')}</p>
-            <p className="text-game-muted text-xs mt-0.5">{t('dashboard.install.subtitle')}</p>
+            <p className="text-white font-semibold text-sm">{t("dashboard.install.title")}</p>
+            <p className="text-game-muted text-xs mt-0.5">{t("dashboard.install.subtitle")}</p>
           </div>
           {installDone ? (
             <div className="flex items-center gap-1.5 text-green-400 text-sm font-semibold shrink-0">
-              <CheckCircle className="w-4 h-4" /> {t('dashboard.install.done')}
+              <CheckCircle className="w-4 h-4" /> {t("dashboard.install.done")}
             </div>
           ) : deferredPrompt ? (
             <button onClick={handleInstall} className="shrink-0 flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors">
-              <Download className="w-4 h-4" /> {t('dashboard.install.button')}
+              <Download className="w-4 h-4" /> {t("dashboard.install.button")}
             </button>
           ) : (
-            <p className="text-game-muted text-xs shrink-0">{t('dashboard.install.manual')}</p>
+            <p className="text-game-muted text-xs shrink-0">{t("dashboard.install.manual")}</p>
           )}
         </div>
       )}
 
-      {/* Stats */}
       <div data-tour="stats-grid" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(({ labelKey, value, icon: Icon, color, bg }) => (
-          <div key={labelKey} className={`rounded-xl border p-4 ${bg}`}>
+        {publicStats.map(({ labelKey, value, icon: Icon, color, bg }) => (
+          <div key={labelKey} className={"rounded-xl border p-4 " + bg}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-game-muted text-xs font-medium">{t(labelKey)}</span>
-              <Icon className={`w-4 h-4 ${color}`} />
+              <Icon className={"w-4 h-4 " + color} />
             </div>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            <p className={"text-2xl font-bold " + color}>{value}</p>
           </div>
         ))}
+        <RoleGuard role="admin">
+          <div className={"rounded-xl border p-4 " + earningsStat.bg}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-game-muted text-xs font-medium">{t(earningsStat.labelKey)}</span>
+              <earningsStat.icon className={"w-4 h-4 " + earningsStat.color} />
+            </div>
+            <p className={"text-2xl font-bold " + earningsStat.color}>{earningsStat.value}</p>
+          </div>
+        </RoleGuard>
       </div>
 
-      {/* P&L cards */}
-      <div data-tour="pnl-cards" className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-game-surface border border-game-border rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-blue-400" /> {t('dashboard.pnl.today')}
-          </h3>
-          <div className="space-y-2">
-            <div className="flex justify-between"><span className="text-game-muted text-sm">{t('common.earnings')}</span><span className="text-green-400 font-bold">${todayEarnings.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-game-muted text-sm">{t('common.expenses')}</span><span className="text-red-400 font-bold">${todayExpenses.toFixed(2)}</span></div>
-            <div className="border-t border-game-border pt-2 flex justify-between">
-              <span className="text-white text-sm font-semibold">{t('common.netProfit')}</span>
-              <span className={`font-bold ${todayEarnings - todayExpenses >= 0 ? "text-blue-400" : "text-red-400"}`}>${(todayEarnings - todayExpenses).toFixed(2)}</span>
+      <RoleGuard role="admin">
+        <div data-tour="pnl-cards" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-game-surface border border-game-border rounded-xl p-5">
+            <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-blue-400" /> {t("dashboard.pnl.today")}
+            </h3>
+            <div className="space-y-2">
+              <div className="flex justify-between"><span className="text-game-muted text-sm">{t("common.earnings")}</span><span className="text-green-400 font-bold">${todayEarnings.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-game-muted text-sm">{t("common.expenses")}</span><span className="text-red-400 font-bold">${todayExpenses.toFixed(2)}</span></div>
+              <div className="border-t border-game-border pt-2 flex justify-between">
+                <span className="text-white text-sm font-semibold">{t("common.netProfit")}</span>
+                <span className={"font-bold " + (todayEarnings - todayExpenses >= 0 ? "text-blue-400" : "text-red-400")}>${(todayEarnings - todayExpenses).toFixed(2)}</span>
+              </div>
             </div>
+            <Link to="/expenses" className="text-blue-400 text-xs mt-3 block hover:text-blue-300">{t("dashboard.pnl.manageExpenses")}</Link>
           </div>
-          <Link to="/expenses" className="text-blue-400 text-xs mt-3 block hover:text-blue-300">{t('dashboard.pnl.manageExpenses')}</Link>
-        </div>
-        <div className="bg-game-surface border border-game-border rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-purple-400" /> {t('dashboard.pnl.thisMonth')}
-          </h3>
-          <div className="space-y-2">
-            <div className="flex justify-between"><span className="text-game-muted text-sm">{t('common.earnings')}</span><span className="text-green-400 font-bold">${monthEarnings.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-game-muted text-sm">{t('common.expenses')}</span><span className="text-red-400 font-bold">${monthExpenses.toFixed(2)}</span></div>
-            <div className="border-t border-game-border pt-2 flex justify-between">
-              <span className="text-white text-sm font-semibold">{t('common.netProfit')}</span>
-              <span className={`font-bold ${monthEarnings - monthExpenses >= 0 ? "text-blue-400" : "text-red-400"}`}>${(monthEarnings - monthExpenses).toFixed(2)}</span>
+          <div className="bg-game-surface border border-game-border rounded-xl p-5">
+            <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-purple-400" /> {t("dashboard.pnl.thisMonth")}
+            </h3>
+            <div className="space-y-2">
+              <div className="flex justify-between"><span className="text-game-muted text-sm">{t("common.earnings")}</span><span className="text-green-400 font-bold">${monthEarnings.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-game-muted text-sm">{t("common.expenses")}</span><span className="text-red-400 font-bold">${monthExpenses.toFixed(2)}</span></div>
+              <div className="border-t border-game-border pt-2 flex justify-between">
+                <span className="text-white text-sm font-semibold">{t("common.netProfit")}</span>
+                <span className={"font-bold " + (monthEarnings - monthExpenses >= 0 ? "text-blue-400" : "text-red-400")}>${(monthEarnings - monthExpenses).toFixed(2)}</span>
+              </div>
             </div>
+            <Link to="/analytics" className="text-blue-400 text-xs mt-3 block hover:text-blue-300">{t("dashboard.pnl.fullAnalytics")}</Link>
           </div>
-          <Link to="/analytics" className="text-blue-400 text-xs mt-3 block hover:text-blue-300">{t('dashboard.pnl.fullAnalytics')}</Link>
         </div>
-      </div>
+      </RoleGuard>
 
-      {/* Occupancy chart */}
       {hourlyData.length > 0 && (
         <div data-tour="occupancy-chart" className="bg-game-surface border border-game-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-            <h3 className="text-white font-semibold">{t('dashboard.occupancy.title')}</h3>
+            <h3 className="text-white font-semibold">{t("dashboard.occupancy.title")}</h3>
             {peakHour && (
               <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-full font-medium">
-                {t('dashboard.occupancy.peakHour').replace('{hour}', peakHour.hour).replace('{count}', peakHour.PS5 + peakHour.PS4)}
+                {t("dashboard.occupancy.peakHour").replace("{hour}", peakHour.hour).replace("{count}", peakHour.PS5 + peakHour.PS4)}
               </span>
             )}
           </div>
-          <p className="text-game-muted text-xs mb-4">{t('dashboard.occupancy.subtitle')}</p>
+          <p className="text-game-muted text-xs mb-4">{t("dashboard.occupancy.subtitle")}</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={hourlyData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 14%)" />
@@ -185,46 +193,44 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Console Status Grid */}
       <div data-tour="console-status-grid">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">{t('dashboard.consoleStatus.title')}</h3>
-          <Link to="/consoles" className="text-blue-400 text-sm hover:text-blue-300 transition-colors">{t('dashboard.consoleStatus.manage')}</Link>
+          <h3 className="text-white font-semibold">{t("dashboard.consoleStatus.title")}</h3>
+          <Link to="/consoles" className="text-blue-400 text-sm hover:text-blue-300 transition-colors">{t("dashboard.consoleStatus.manage")}</Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {consoles.map((c) => {
             const activeSession = activeSessions.find((s) => s.console_id === c.id);
-            const elapsed = activeSession ? Math.floor((Date.now() - new Date(activeSession.start_time)) / 60000) : null;
+            const elapsed = activeSession ? Math.floor((Date.now() - new Date(activeSession.start_time).getTime()) / 60000) : null;
             return (
-              <div key={c.id} className={`rounded-xl border p-4 flex flex-col gap-2 transition-all ${c.status === "available" ? "bg-green-400/5 border-green-500/30" : c.status === "occupied" ? "bg-blue-400/5 border-blue-500/30" : "bg-red-400/5 border-red-500/30"}`}>
+              <div key={c.id} className={"rounded-xl border p-4 flex flex-col gap-2 transition-all " + (c.status === "available" ? "bg-green-400/5 border-green-500/30" : c.status === "occupied" ? "bg-blue-400/5 border-blue-500/30" : "bg-red-400/5 border-red-500/30")}>
                 <div className="flex items-center justify-between">
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.type === "PS5" ? "bg-blue-600/30 text-blue-300" : "bg-purple-600/30 text-purple-300"}`}>{c.type}</span>
-                  <div className={`w-2 h-2 rounded-full ${c.status === "available" ? "bg-green-400" : c.status === "occupied" ? "bg-blue-400 animate-pulse" : "bg-red-400"}`} />
+                  <span className={"text-xs font-bold px-2 py-0.5 rounded-full " + (c.type === "PS5" ? "bg-blue-600/30 text-blue-300" : "bg-purple-600/30 text-purple-300")}>{c.type}</span>
+                  <div className={"w-2 h-2 rounded-full " + (c.status === "available" ? "bg-green-400" : c.status === "occupied" ? "bg-blue-400 animate-pulse" : "bg-red-400")} />
                 </div>
                 <p className="text-white font-semibold text-sm">{c.name}</p>
-                {elapsed !== null && <p className="text-game-muted text-xs">{t('dashboard.activeSessions.playing').replace('{min}', elapsed)}</p>}
-                {c.status === "available" && <p className="text-green-400 text-xs font-medium">{t('dashboard.consoleStatus.ready')}</p>}
-                {c.status === "maintenance" && <p className="text-red-400 text-xs font-medium">{t('dashboard.consoleStatus.maintenance')}</p>}
+                {elapsed !== null && <p className="text-game-muted text-xs">{t("dashboard.activeSessions.playing").replace("{min}", elapsed)}</p>}
+                {c.status === "available" && <p className="text-green-400 text-xs font-medium">{t("dashboard.consoleStatus.ready")}</p>}
+                {c.status === "maintenance" && <p className="text-red-400 text-xs font-medium">{t("dashboard.consoleStatus.maintenance")}</p>}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Active Sessions */}
       {activeSessions.length > 0 && (
         <div data-tour="active-sessions">
-          <h3 className="text-white font-semibold mb-4">{t('dashboard.activeSessions.title')}</h3>
+          <h3 className="text-white font-semibold mb-4">{t("dashboard.activeSessions.title")}</h3>
           <div className="space-y-2">
             {activeSessions.map((s) => {
-              const elapsed = Math.floor((Date.now() - new Date(s.start_time)) / 60000);
+              const elapsed = Math.floor((Date.now() - new Date(s.start_time).getTime()) / 60000);
               return (
                 <div key={s.id} className="bg-game-surface border border-game-border rounded-xl px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
                     <div>
                       <p className="text-white text-sm font-medium">{s.console_name}</p>
-                      <p className="text-game-muted text-xs">{s.player_name || t('common.anonymous')}</p>
+                      <p className="text-game-muted text-xs">{s.player_name || t("common.anonymous")}</p>
                     </div>
                   </div>
                   <div className="text-right">

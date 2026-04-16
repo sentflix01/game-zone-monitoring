@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useTranslation } from "@/i18n/I18nContext";
+import RoleGuard from "@/components/RoleGuard";
 
 export default function Consoles() {
   const { t } = useTranslation();
@@ -160,9 +161,11 @@ export default function Consoles() {
           <h2 className="text-2xl font-bold text-white">{t('consoles.title')}</h2>
           <p className="text-game-muted text-sm mt-1">{t('consoles.subtitle').replace('{count}', consoles.length)}</p>
         </div>
-        <Button data-tour="add-console" onClick={openAdd} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-          <Plus className="w-4 h-4" /> {t('consoles.addButton')}
-        </Button>
+        <RoleGuard role="admin">
+          <Button data-tour="add-console" onClick={openAdd} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+            <Plus className="w-4 h-4" /> {t('consoles.addButton')}
+          </Button>
+        </RoleGuard>
       </div>
 
       <div data-tour="console-list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -215,12 +218,14 @@ export default function Consoles() {
                     <Square className="w-3 h-3" /> {t('consoles.action.end')}
                   </Button>
                 )}
-                <Button onClick={() => openEdit(c)} variant="outline" size="icon" className="border-game-border text-game-muted hover:text-white">
-                  <Edit2 className="w-3 h-3" />
-                </Button>
-                <Button onClick={() => remove(c.id)} variant="outline" size="icon" className="border-red-500/30 text-red-400 hover:bg-red-600/20">
-                  <Trash2 className="w-3 h-3" />
-                </Button>
+                <RoleGuard role="admin">
+                  <Button onClick={() => openEdit(c)} variant="outline" size="icon" className="border-game-border text-game-muted hover:text-white">
+                    <Edit2 className="w-3 h-3" />
+                  </Button>
+                  <Button onClick={() => remove(c.id)} variant="outline" size="icon" className="border-red-500/30 text-red-400 hover:bg-red-600/20">
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </RoleGuard>
               </div>
             </div>
           );
