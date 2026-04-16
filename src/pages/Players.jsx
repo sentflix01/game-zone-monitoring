@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { storageAdapter } from "@/api/storageAdapter";
+import { useTranslation } from "@/i18n/I18nContext";
 import { Trophy, Clock, DollarSign, Monitor, User } from "lucide-react";
 
 export default function Players() {
+  const { t } = useTranslation();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -10,8 +12,8 @@ export default function Players() {
 
   useEffect(() => {
     Promise.all([
-      base44.entities.Player.list("-total_spend"),
-      base44.entities.Session.list("-created_date", 500),
+      storageAdapter.entities.Player.list("-total_spend"),
+      storageAdapter.entities.Session.list("-created_date", 500),
     ]).then(([p, s]) => {
       setPlayers(p);
       setSessions(s);
@@ -45,15 +47,13 @@ export default function Players() {
     return (
       <div className="space-y-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Players</h2>
-          <p className="text-game-muted text-sm mt-1">Player leaderboard & history</p>
+          <h2 className="text-2xl font-bold text-white">{t('players.title')}</h2>
+          <p className="text-game-muted text-sm mt-1">{t('players.subtitle').replace('{count}', players.length)}</p>
         </div>
-        <div className="bg-game-surface border border-game-border rounded-xl p-12 text-center">
+        <div data-tour="add-player" className="bg-game-surface border border-game-border rounded-xl p-12 text-center">
           <User className="w-12 h-12 text-game-muted mx-auto mb-3" />
-          <p className="text-white font-medium">No players yet</p>
-          <p className="text-game-muted text-sm mt-1">
-            Player profiles are created automatically when a named session ends
-          </p>
+          <p className="text-white font-medium">{t('players.empty.title')}</p>
+          <p className="text-game-muted text-sm mt-1">{t('players.empty.subtitle')}</p>
         </div>
       </div>
     );
@@ -61,15 +61,13 @@ export default function Players() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white">Players</h2>
-        <p className="text-game-muted text-sm mt-1">
-          {players.length} registered player{players.length !== 1 ? "s" : ""} — ranked by total spend
-        </p>
+        <h2 className="text-2xl font-bold text-white">{t('players.title')}</h2>
+        <p className="text-game-muted text-sm mt-1">{t('players.subtitle').replace('{count}', players.length)}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Leaderboard */}
-        <div className="space-y-3">
+        <div data-tour="player-list" className="space-y-3">
           {players.map((p, i) => {
             const totalSessions = (p.ps5_sessions || 0) + (p.ps4_sessions || 0);
             const ps5Pct =
@@ -110,7 +108,7 @@ export default function Players() {
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-game-muted text-xs flex items-center gap-1">
                         <Monitor className="w-3 h-3" />
-                        {p.total_sessions || 0} sessions
+                        {p.total_sessions || 0} {t('players.stat.totalSessions')}
                       </span>
                       <span className="text-game-muted text-xs flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -149,20 +147,15 @@ export default function Players() {
 
         {/* Player detail panel */}
         {selected && (
-          <div className="bg-game-surface border border-game-border rounded-xl p-5 space-y-4 h-fit">
+          <div data-tour="player-stats" className="bg-game-surface border border-game-border rounded-xl p-5 space-y-4 h-fit">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                <span className="text-white font-bold text-lg">
-                  {selected.name.charAt(0).toUpperCase()}
-                </span>
+                <span className="text-white font-bold text-lg">{selected.name.charAt(0).toUpperCase()}</span>
               </div>
               <div>
                 <h3 className="text-white font-bold text-lg">{selected.name}</h3>
                 <p className="text-game-muted text-xs">
-                  Last seen:{" "}
-                  {selected.last_seen
-                    ? new Date(selected.last_seen).toLocaleDateString()
-                    : "—"}
+                  {t('players.stat.lastSeen').replace('{date}', selected.last_seen ? new Date(selected.last_seen).toLocaleDateString() : '—')}
                 </p>
               </div>
             </div>
@@ -170,79 +163,46 @@ export default function Players() {
             {/* Stats grid */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-game-bg rounded-lg p-3">
-                <p className="text-game-muted text-xs mb-1 flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" /> Total Spend
-                </p>
-                <p className="text-green-400 font-bold text-xl">
-                  ${(selected.total_spend || 0).toFixed(2)}
-                </p>
+                <p className="text-game-muted text-xs mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3" /> {t('players.stat.totalSpend')}</p>
+                <p className="text-green-400 font-bold text-xl">${(selected.total_spend || 0).toFixed(2)}</p>
               </div>
               <div className="bg-game-bg rounded-lg p-3">
-                <p className="text-game-muted text-xs mb-1 flex items-center gap-1">
-                  <Monitor className="w-3 h-3" /> Sessions
-                </p>
+                <p className="text-game-muted text-xs mb-1 flex items-center gap-1"><Monitor className="w-3 h-3" /> {t('players.stat.totalSessions')}</p>
                 <p className="text-white font-bold text-xl">{selected.total_sessions || 0}</p>
               </div>
               <div className="bg-game-bg rounded-lg p-3">
-                <p className="text-game-muted text-xs mb-1 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Hours Played
-                </p>
-                <p className="text-blue-400 font-bold text-xl">
-                  {((selected.total_minutes || 0) / 60).toFixed(1)}h
-                </p>
+                <p className="text-game-muted text-xs mb-1 flex items-center gap-1"><Clock className="w-3 h-3" /> {t('players.stat.hoursPlayed')}</p>
+                <p className="text-blue-400 font-bold text-xl">{((selected.total_minutes || 0) / 60).toFixed(1)}h</p>
               </div>
               <div className="bg-game-bg rounded-lg p-3">
-                <p className="text-game-muted text-xs mb-1 flex items-center gap-1">
-                  <Trophy className="w-3 h-3" /> Favourite
-                </p>
-                <p
-                  className={`font-bold text-xl ${
-                    selected.favourite_console === "PS5"
-                      ? "text-blue-400"
-                      : "text-purple-400"
-                  }`}
-                >
+                <p className="text-game-muted text-xs mb-1 flex items-center gap-1"><Trophy className="w-3 h-3" /> {t('players.stat.favourite')}</p>
+                <p className={`font-bold text-xl ${selected.favourite_console === "PS5" ? "text-blue-400" : "text-purple-400"}`}>
                   {selected.favourite_console || "—"}
                 </p>
               </div>
             </div>
 
-            {/* PS4 vs PS5 breakdown */}
             <div>
-              <p className="text-game-muted text-xs mb-2">Console breakdown</p>
+              <p className="text-game-muted text-xs mb-2">{t('players.breakdown.title')}</p>
               <div className="flex gap-4 text-sm">
-                <span className="text-blue-300 font-medium">
-                  PS5: {selected.ps5_sessions || 0}
-                </span>
-                <span className="text-purple-300 font-medium">
-                  PS4: {selected.ps4_sessions || 0}
-                </span>
+                <span className="text-blue-300 font-medium">PS5: {selected.ps5_sessions || 0}</span>
+                <span className="text-purple-300 font-medium">PS4: {selected.ps4_sessions || 0}</span>
               </div>
             </div>
 
-            {/* Recent sessions */}
             {playerSessions.length > 0 && (
               <div>
-                <p className="text-game-muted text-xs mb-2">Recent sessions</p>
+                <p className="text-game-muted text-xs mb-2">{t('players.recentSessions')}</p>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {playerSessions.slice(0, 10).map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between bg-game-bg rounded-lg px-3 py-2"
-                    >
+                    <div key={s.id} className="flex items-center justify-between bg-game-bg rounded-lg px-3 py-2">
                       <div>
                         <p className="text-white text-xs font-medium">{s.console_name}</p>
-                        <p className="text-game-muted text-xs">
-                          {new Date(s.start_time).toLocaleDateString()}
-                        </p>
+                        <p className="text-game-muted text-xs">{new Date(s.start_time).toLocaleDateString()}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-green-400 text-xs font-bold">
-                          ${(s.amount_charged || 0).toFixed(2)}
-                        </p>
-                        <p className="text-game-muted text-xs">
-                          {s.duration_minutes || 0}m
-                        </p>
+                        <p className="text-green-400 text-xs font-bold">${(s.amount_charged || 0).toFixed(2)}</p>
+                        <p className="text-game-muted text-xs">{s.duration_minutes || 0}m</p>
                       </div>
                     </div>
                   ))}

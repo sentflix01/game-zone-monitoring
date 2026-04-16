@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { storageAdapter } from "@/api/storageAdapter";
 import { DollarSign, Clock, Trophy, BarChart2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,13 +7,15 @@ import {
   BarChart, Bar, ResponsiveContainer
 } from "recharts";
 import { subDays, format } from "date-fns";
+import { useTranslation } from "@/i18n/I18nContext";
 
 export default function Report() {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    base44.entities.Session.list("-created_date", 1000).then((s) => {
+    storageAdapter.entities.Session.list("-created_date", 1000).then((s) => {
       setSessions(s);
       setLoading(false);
     });
@@ -124,23 +126,25 @@ export default function Report() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div data-tour="report-sections" className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold text-white">Daily Report</h2>
+          <h2 className="text-2xl font-bold text-white">{t('report.title')}</h2>
           <p className="text-game-muted text-sm mt-1">
-            {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            {t('report.subtitle').replace('{date}', new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }))}
           </p>
         </div>
-        <Button onClick={downloadCSV} className="bg-game-surface border border-game-border text-white hover:bg-white/10 gap-2" variant="outline">
-          <Download className="w-4 h-4" /> Download CSV
-        </Button>
+        <div data-tour="export-controls">
+          <Button onClick={downloadCSV} className="bg-game-surface border border-game-border text-white hover:bg-white/10 gap-2" variant="outline">
+            <Download className="w-4 h-4" /> {t('report.download')}
+          </Button>
+        </div>
       </div>
 
       {todaySessions.length === 0 ? (
         <div className="bg-game-surface border border-game-border rounded-xl p-12 text-center">
           <BarChart2 className="w-12 h-12 text-game-muted mx-auto mb-3" />
-          <p className="text-white font-medium">No completed sessions today</p>
-          <p className="text-game-muted text-sm mt-1">Start and end sessions to see your daily report</p>
+          <p className="text-white font-medium">{t('report.empty')}</p>
+          <p className="text-game-muted text-sm mt-1">{t('report.empty.subtitle')}</p>
         </div>
       ) : (
         <>
@@ -149,28 +153,28 @@ export default function Report() {
             <div className="bg-game-surface border border-yellow-500/20 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className="w-4 h-4 text-yellow-400" />
-                <span className="text-game-muted text-xs font-medium">Today's Earnings</span>
+                <span className="text-game-muted text-xs font-medium">{t('report.earnings')}</span>
               </div>
               <p className="text-3xl font-bold text-yellow-400">${totalEarnings.toFixed(2)}</p>
-              <p className="text-game-muted text-xs mt-1">{todaySessions.length} sessions</p>
+              <p className="text-game-muted text-xs mt-1">{todaySessions.length} {t('common.sessions').toLowerCase()}</p>
             </div>
             <div className="bg-game-surface border border-blue-500/20 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-2">
                 <Clock className="w-4 h-4 text-blue-400" />
-                <span className="text-game-muted text-xs font-medium">Total Hours Played</span>
+                <span className="text-game-muted text-xs font-medium">{t('report.hoursPlayed')}</span>
               </div>
               <p className="text-3xl font-bold text-blue-400">{totalHours}h</p>
-              <p className="text-game-muted text-xs mt-1">{totalMinutes} minutes total</p>
+              <p className="text-game-muted text-xs mt-1">{totalMinutes} {t('common.minutes').toLowerCase()}</p>
             </div>
             <div className="bg-game-surface border border-purple-500/20 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-2">
                 <Trophy className="w-4 h-4 text-purple-400" />
-                <span className="text-game-muted text-xs font-medium">Most Used Console</span>
+                <span className="text-game-muted text-xs font-medium">{t('report.mostUsed')}</span>
               </div>
               {topConsole ? (
                 <>
                   <p className="text-xl font-bold text-purple-400 truncate">{topConsole[0]}</p>
-                  <p className="text-game-muted text-xs mt-1">{topConsole[1]} session{topConsole[1] > 1 ? "s" : ""}</p>
+                  <p className="text-game-muted text-xs mt-1">{topConsole[1]} {t('common.sessions').toLowerCase()}</p>
                 </>
               ) : (
                 <p className="text-game-muted text-sm">—</p>
@@ -180,7 +184,7 @@ export default function Report() {
 
           {/* Console breakdown */}
           <div className="bg-game-surface border border-game-border rounded-xl p-5">
-            <h3 className="text-white font-semibold mb-4">Today's Console Breakdown</h3>
+            <h3 className="text-white font-semibold mb-4">{t('report.breakdown.title')}</h3>
             <div className="space-y-3">
               {consoleBreakdown.map(([name, data]) => {
                 const pct = totalEarnings > 0 ? (data.earnings / totalEarnings) * 100 : 0;
@@ -213,8 +217,8 @@ export default function Report() {
       )}
 
       {/* 30-day revenue trend */}
-      <div className="bg-game-surface border border-game-border rounded-xl p-5">
-        <h3 className="text-white font-semibold mb-4">Revenue — Last 30 Days</h3>
+      <div data-tour="date-range" className="bg-game-surface border border-game-border rounded-xl p-5">
+        <h3 className="text-white font-semibold mb-4">{t('report.revenue.title')}</h3>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={last30Days} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 14%)" />
@@ -229,8 +233,8 @@ export default function Report() {
       {/* Hourly PS4 vs PS5 */}
       {hourlyData.length > 0 && (
         <div className="bg-game-surface border border-game-border rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-1">Hourly Earnings — PS5 vs PS4</h3>
-          <p className="text-game-muted text-xs mb-4">All-time earnings grouped by hour of day</p>
+          <h3 className="text-white font-semibold mb-1">{t('report.hourly.title')}</h3>
+          <p className="text-game-muted text-xs mb-4">{t('report.hourly.subtitle')}</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={hourlyData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 14%)" />

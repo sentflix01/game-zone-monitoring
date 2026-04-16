@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { storageAdapter } from "@/api/storageAdapter";
 import { Clock, DollarSign, Calendar } from "lucide-react";
+import { useTranslation } from "@/i18n/I18nContext";
 
 export default function Sessions() {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    base44.entities.Session.list("-created_date", 200).then((s) => {
+    storageAdapter.entities.Session.list("-created_date", 200).then((s) => {
       setSessions(s);
       setLoading(false);
     });
@@ -38,49 +40,53 @@ export default function Sessions() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white">Sessions</h2>
-        <p className="text-game-muted text-sm mt-1">All gaming sessions history</p>
+        <h2 className="text-2xl font-bold text-white">{t('sessions.title')}</h2>
+        <p className="text-game-muted text-sm mt-1">{t('sessions.subtitle')}</p>
       </div>
 
       {/* Earnings summary */}
-      <div className="grid grid-cols-2 gap-4">
+      <div data-tour="earnings-summary" className="grid grid-cols-2 gap-4">
         <div className="bg-game-surface border border-yellow-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <DollarSign className="w-4 h-4 text-yellow-400" />
-            <span className="text-game-muted text-xs">Today's Earnings</span>
+            <span className="text-game-muted text-xs">{t('sessions.todayEarnings')}</span>
           </div>
           <p className="text-2xl font-bold text-yellow-400">${todayEarnings.toFixed(2)}</p>
         </div>
         <div className="bg-game-surface border border-green-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <DollarSign className="w-4 h-4 text-green-400" />
-            <span className="text-game-muted text-xs">Total Earnings</span>
+            <span className="text-game-muted text-xs">{t('sessions.totalEarnings')}</span>
           </div>
           <p className="text-2xl font-bold text-green-400">${totalEarnings.toFixed(2)}</p>
         </div>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2">
-        {["all", "active", "today"].map((f) => (
+      <div data-tour="filter-tabs" className="flex gap-2">
+        {[
+          { value: "all", label: t('sessions.filter.all') },
+          { value: "active", label: t('sessions.filter.active') },
+          { value: "today", label: t('sessions.filter.today') },
+        ].map((f) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={f.value}
+            onClick={() => setFilter(f.value)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium capitalize transition-all ${
-              filter === f
+              filter === f.value
                 ? "bg-blue-600 text-white"
                 : "bg-game-surface border border-game-border text-game-muted hover:text-white"
             }`}
           >
-            {f}
+            {f.label}
           </button>
         ))}
       </div>
 
       {/* Sessions list */}
-      <div className="space-y-2">
+      <div data-tour="sessions-list" className="space-y-2">
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-game-muted">No sessions found</div>
+          <div className="text-center py-12 text-game-muted">{t('sessions.empty')}</div>
         )}
         {filtered.map((s) => {
           const elapsed = s.status === "active"
@@ -105,7 +111,7 @@ export default function Sessions() {
                 <div>
                   <p className="text-white text-sm font-medium">{s.console_name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-game-muted text-xs">{s.player_name || "Anonymous"}</span>
+                    <span className="text-game-muted text-xs">{s.player_name || t('common.anonymous')}</span>
                     <span className="text-game-muted text-xs">•</span>
                     <span className={`text-xs font-medium ${s.console_type === "PS5" ? "text-blue-400" : "text-purple-400"}`}>
                       {s.console_type}
@@ -122,7 +128,7 @@ export default function Sessions() {
                   <p className="text-green-400 text-sm font-bold mt-0.5">${(s.amount_charged || 0).toFixed(2)}</p>
                 )}
                 {s.status === "active" && (
-                  <span className="text-blue-400 text-xs">Live</span>
+                  <span className="text-blue-400 text-xs">{t('common.live')}</span>
                 )}
                 <div className="flex items-center gap-1 justify-end mt-0.5">
                   <Calendar className="w-3 h-3 text-game-muted" />

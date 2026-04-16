@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { storageAdapter } from "@/api/storageAdapter";
 import { Plus, Edit2, Trash2, Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useTranslation } from "@/i18n/I18nContext";
 
 export default function Consoles() {
+  const { t } = useTranslation();
   const [consoles, setConsoles] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [pricing, setPricing] = useState([]);
@@ -21,10 +23,10 @@ export default function Consoles() {
 
   const load = async () => {
     const [c, s, p, allSessions] = await Promise.all([
-      base44.entities.Console.list(),
-      base44.entities.Session.filter({ status: "active" }),
-      base44.entities.Pricing.list(),
-      base44.entities.Session.list("-created_date", 200),
+      storageAdapter.entities.Console.list(),
+      storageAdapter.entities.Session.filter({ status: "active" }),
+      storageAdapter.entities.Pricing.list(),
+      storageAdapter.entities.Session.list("-created_date", 200),
     ]);
     setConsoles(c);
     setSessions(s);
@@ -51,27 +53,32 @@ export default function Consoles() {
   };
 
   const save = async () => {
-    if (!form.name) return toast.error("Console name is required");
+    if (!form.name) return toast.error(t('consoles.toast.nameRequired'));
     if (editing) {
-      await base44.entities.Console.update(editing.id, form);
+      await storageAdapter.entities.Console.update(editing.id, form);
     } else {
-      await base44.entities.Console.create(form);
+      await storageAdapter.entities.Console.create(form);
     }
-    toast.success(editing ? "Console updated" : "Console added");
+    toast.success(editing ? t('consoles.toast.updated') : t('consoles.toast.added'));
     setDialogOpen(false);
     load();
   };
 
   const remove = async (id) => {
-    await base44.entities.Console.delete(id);
-    toast.success("Console removed");
+    const hasActive = sessions.some((s) => s.console_id === id);
+    if (hasActive) {
+      toast.error(t('consoles.toast.deleteBlocked'));
+      return;
+    }
+    await storageAdapter.entities.Console.delete(id);
+    toast.success(t('consoles.toast.removed'));
     load();
   };
 
   const startSession = async () => {
     const c = sessionDialog;
-    await base44.entities.Console.update(c.id, { status: "occupied" });
-    await base44.entities.Session.create({
+    await storageAdapter.entities.Console.update(c.id, { status: "occupied" });
+    await storageAdapter.entities.Session.create({
       console_id: c.id,
       console_name: c.name,
       console_type: c.type,
@@ -79,7 +86,7 @@ export default function Consoles() {
       start_time: new Date().toISOString(),
       status: "active",
     });
-    toast.success("Session started!");
+    toast.success(t('consoles.toast.sessionStarted'));
     setSessionDialog(null);
     setPlayerName("");
     load();
@@ -93,18 +100,18 @@ export default function Consoles() {
     const amount = rate ? (durationMin / 60) * rate.hourly_rate : 0;
     const charged = parseFloat(amount.toFixed(2));
 
-    await base44.entities.Session.update(active.id, {
+    await storageAdapter.entities.Session.update(active.id, {
       end_time: new Date().toISOString(),
       duration_minutes: durationMin,
       amount_charged: charged,
       status: "completed",
     });
-    await base44.entities.Console.update(c.id, { status: "available" });
+    await storageAdapter.entities.Console.update(c.id, { status: "available" });
 
     // Auto-create or update player profile for named players
     const name = active.player_name;
     if (name && name !== "Anonymous") {
-      const allPlayers = await base44.entities.Player.list();
+      const allPlayers = await storageAdapter.entities.Player.list();
       const existing = allPlayers.find(
         (p) => p.name.toLowerCase() === name.toLowerCase()
       );
@@ -113,7 +120,7 @@ export default function Consoles() {
       if (existing) {
         const newPs5 = (existing.ps5_sessions || 0) + ps5Add;
         const newPs4 = (existing.ps4_sessions || 0) + ps4Add;
-        await base44.entities.Player.update(existing.id, {
+        await storageAdapter.entities.Player.update(existing.id, {
           total_sessions: (existing.total_sessions || 0) + 1,
           total_minutes: (existing.total_minutes || 0) + durationMin,
           total_spend: parseFloat(((existing.total_spend || 0) + charged).toFixed(2)),
@@ -123,7 +130,7 @@ export default function Consoles() {
           last_seen: new Date().toISOString(),
         });
       } else {
-        await base44.entities.Player.create({
+        await storageAdapter.entities.Player.create({
           name,
           total_sessions: 1,
           total_minutes: durationMin,
@@ -136,7 +143,7 @@ export default function Consoles() {
       }
     }
 
-    toast.success(`Session ended — ${charged.toFixed(2)} charged`);
+    toast.success(t('consoles.toast.sessionEnded').replace('{amount}', charged.toFixed(2)));
     load();
   };
 
@@ -150,15 +157,15 @@ export default function Consoles() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Consoles</h2>
-          <p className="text-game-muted text-sm mt-1">Manage your {consoles.length} consoles</p>
+          <h2 className="text-2xl font-bold text-white">{t('consoles.title')}</h2>
+          <p className="text-game-muted text-sm mt-1">{t('consoles.subtitle').replace('{count}', consoles.length)}</p>
         </div>
-        <Button onClick={openAdd} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-          <Plus className="w-4 h-4" /> Add Console
+        <Button data-tour="add-console" onClick={openAdd} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+          <Plus className="w-4 h-4" /> {t('consoles.addButton')}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div data-tour="console-list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {consoles.map((c) => {
           const active = sessions.find((s) => s.console_id === c.id);
           const elapsed = active ? Math.floor((Date.now() - new Date(active.start_time)) / 60000) : null;
@@ -175,7 +182,7 @@ export default function Consoles() {
                   }`}>{c.type}</span>
                   <h3 className="text-white font-bold text-lg mt-2">{c.name}</h3>
                 </div>
-                <div className={`w-3 h-3 rounded-full mt-1 ${
+                <div data-tour="status-indicators" className={`w-3 h-3 rounded-full mt-1 ${
                   c.status === "available" ? "bg-green-400" :
                   c.status === "occupied" ? "bg-blue-400 animate-pulse" : "bg-red-400"
                 }`} />
@@ -183,7 +190,7 @@ export default function Consoles() {
 
               {active && (
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                  <p className="text-blue-300 text-xs font-medium">Playing: {active.player_name}</p>
+                  <p className="text-blue-300 text-xs font-medium">{t('consoles.playing').replace('{name}', active.player_name)}</p>
                   <p className="text-white font-bold text-xl mt-1">{elapsed}m</p>
                 </div>
               )}
@@ -191,11 +198,12 @@ export default function Consoles() {
               <div className="flex gap-2">
                 {c.status === "available" && (
                   <Button
+                    data-tour="start-session"
                     onClick={() => setSessionDialog(c)}
                     className="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-500/30 gap-1"
                     variant="outline"
                   >
-                    <Play className="w-3 h-3" /> Start
+                    <Play className="w-3 h-3" /> {t('consoles.action.start')}
                   </Button>
                 )}
                 {c.status === "occupied" && (
@@ -204,7 +212,7 @@ export default function Consoles() {
                     className="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 gap-1"
                     variant="outline"
                   >
-                    <Square className="w-3 h-3" /> End
+                    <Square className="w-3 h-3" /> {t('consoles.action.end')}
                   </Button>
                 )}
                 <Button onClick={() => openEdit(c)} variant="outline" size="icon" className="border-game-border text-game-muted hover:text-white">
@@ -223,20 +231,20 @@ export default function Consoles() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="bg-game-surface border-game-border text-white">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Console" : "Add Console"}</DialogTitle>
+            <DialogTitle>{t(editing ? 'consoles.dialog.editTitle' : 'consoles.dialog.addTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className="text-game-muted text-sm mb-1 block">Name</label>
+              <label className="text-game-muted text-sm mb-1 block">{t('consoles.dialog.nameLabel')}</label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. PS5 #1"
+                placeholder={t('consoles.dialog.namePlaceholder')}
                 className="bg-game-bg border-game-border text-white"
               />
             </div>
             <div>
-              <label className="text-game-muted text-sm mb-1 block">Type</label>
+              <label className="text-game-muted text-sm mb-1 block">{t('consoles.dialog.typeLabel')}</label>
               <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                 <SelectTrigger className="bg-game-bg border-game-border text-white">
                   <SelectValue />
@@ -248,19 +256,19 @@ export default function Consoles() {
               </Select>
             </div>
             <div>
-              <label className="text-game-muted text-sm mb-1 block">Status</label>
+              <label className="text-game-muted text-sm mb-1 block">{t('consoles.dialog.statusLabel')}</label>
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                 <SelectTrigger className="bg-game-bg border-game-border text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-game-surface border-game-border">
-                  <SelectItem value="available">Available</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="available">{t('consoles.status.available')}</SelectItem>
+                  <SelectItem value="maintenance">{t('consoles.status.maintenance')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <Button onClick={save} className="w-full bg-blue-600 hover:bg-blue-500 text-white">
-              {editing ? "Save Changes" : "Add Console"}
+              {t(editing ? 'consoles.dialog.saveEdit' : 'consoles.dialog.saveAdd')}
             </Button>
           </div>
         </DialogContent>
@@ -270,16 +278,16 @@ export default function Consoles() {
       <Dialog open={!!sessionDialog} onOpenChange={() => setSessionDialog(null)}>
         <DialogContent className="bg-game-surface border-game-border text-white">
           <DialogHeader>
-            <DialogTitle>Start Session — {sessionDialog?.name}</DialogTitle>
+            <DialogTitle>{t('consoles.session.startTitle').replace('{name}', sessionDialog?.name)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className="text-game-muted text-sm mb-1 block">Player Name (optional)</label>
+              <label className="text-game-muted text-sm mb-1 block">{t('consoles.session.playerLabel')}</label>
               <Input
                 list="past-players"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="e.g. John"
+                placeholder={t('consoles.session.playerPlaceholder')}
                 className="bg-game-bg border-game-border text-white"
               />
               <datalist id="past-players">
@@ -289,7 +297,7 @@ export default function Consoles() {
               </datalist>
             </div>
             <Button onClick={startSession} className="w-full bg-green-600 hover:bg-green-500 text-white gap-2">
-              <Play className="w-4 h-4" /> Start Session
+              <Play className="w-4 h-4" /> {t('consoles.session.startButton')}
             </Button>
           </div>
         </DialogContent>
