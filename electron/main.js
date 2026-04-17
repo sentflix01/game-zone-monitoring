@@ -5,6 +5,7 @@ const {
   Menu,
   dialog,
   session,
+  ipcMain,
 } = require('electron');
 const path = require('path');
 
@@ -190,6 +191,11 @@ function setupAutoUpdater() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  // Handle open-external IPC from renderer
+  ipcMain.on('open-external', (_event, url) => {
+    shell.openExternal(url);
+  });
+
   buildMenu();
   createWindow();
   setupAutoUpdater();

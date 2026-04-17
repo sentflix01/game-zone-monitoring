@@ -128,6 +128,13 @@ export default function Login() {
   async function handleGoogleSignIn() {
     setLoading(true);
     try {
+      if (isElectron) {
+        // Electron can't do popups — open Google auth in system browser
+        // User signs in on web, Firebase redirects back; they then use email/password
+        toast.error('Google sign-in is not supported in the desktop app. Please use email + password.');
+        setLoading(false);
+        return;
+      }
       if (isCapacitor) {
         const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
         const googleUser = await GoogleAuth.signIn();
@@ -223,7 +230,7 @@ export default function Login() {
               <div className="flex-1 h-px bg-game-border" />
             </div>
 
-            {/* Magic link — web only (doesn't work in Electron) */}
+            {/* Magic link — web only */}
             {!isElectron && (
               <form onSubmit={handleSendLink}>
                 <Button
@@ -238,19 +245,18 @@ export default function Login() {
               </form>
             )}
 
-            {/* Google — web + Android only */}
-            {!isElectron && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleGoogleSignIn}
-                disabled={loading || isOffline}
-                className="w-full border-game-border text-white hover:bg-game-bg"
-              >
-                <Chrome className="w-4 h-4 mr-2" />
-                Continue with Google
-              </Button>
-            )}
+            {/* Google — all platforms (Electron shows info toast) */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGoogleSignIn}
+              disabled={loading || isOffline}
+              className="w-full border-game-border text-white hover:bg-game-bg"
+            >
+              <Chrome className="w-4 h-4 mr-2" />
+              Continue with Google
+              {isElectron && <span className="text-game-muted text-xs ml-1">(web only)</span>}
+            </Button>
           </>
         )}
 
