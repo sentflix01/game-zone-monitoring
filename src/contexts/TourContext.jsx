@@ -18,10 +18,10 @@ export function TourProvider({ children }) {
     currentStepIndex: 0,
   });
 
-  // Auto-start on first visit
+  // Auto-start on first visit (only when inside the app, not on login page)
   useEffect(() => {
     try {
-      if (!localStorage.getItem(STORAGE_KEY)) {
+      if (!localStorage.getItem(STORAGE_KEY) && location.pathname !== '/login') {
         setState({ isActive: true, currentPageIndex: 0, currentStepIndex: 0 });
       }
     } catch { /* private browsing */ }
@@ -111,7 +111,7 @@ export function TourProvider({ children }) {
     }}>
       {children}
       <HelpButton currentPath={location.pathname} />
-      {state.isActive && currentStep && <TourTooltip />}
+      {state.isActive && currentStep && location.pathname !== '/login' && <TourTooltip />}
     </TourContext.Provider>
   );
 }
