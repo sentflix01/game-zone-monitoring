@@ -52,7 +52,7 @@ jobs:
       # Build web assets with base '/' for Capacitor
       - run: npm run build
       # Sync fresh dist/ into android assets (overwrites any stale files)
-      - run: npx cap sync android --no-build
+      - run: npx cap sync android
       - run: chmod +x android/gradlew
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
