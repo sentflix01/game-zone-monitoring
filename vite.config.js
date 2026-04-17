@@ -3,13 +3,16 @@ import { defineConfig } from 'vite';
 import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Use './' base for Electron (file:// protocol), '/' for web and Capacitor
+const isElectronBuild = process.env.BUILD_TARGET === 'electron';
+
 export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: [],
   },
-  base: './',
+  base: isElectronBuild ? './' : '/',
   plugins: [
     react(),
     VitePWA({
