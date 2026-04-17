@@ -33,6 +33,7 @@ function getFirebaseErrorKey(code) {
   }
 }
 
+
 export default function Login() {
   const { isAuthenticated } = useAuth();
   const { t } = useTranslation();

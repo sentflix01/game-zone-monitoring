@@ -65,9 +65,14 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // @capacitor/preferences is only available at runtime on native Capacitor platforms.
-      // Externalizing it prevents Rollup from trying to bundle it for web/Electron builds.
       external: ['@capacitor/preferences'],
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'charts': ['recharts'],
+          'ui': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
+        },
+      },
     },
   },
 });
