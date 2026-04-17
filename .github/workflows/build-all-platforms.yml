@@ -1,4 +1,4 @@
-name: Build All Platforms
+name: Build & Release All Platforms
 
 on:
   push:
@@ -12,159 +12,130 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - run: npm ci
-
+      - run: npm install --legacy-peer-deps
       - run: npm run build
-
-      - name: Upload web dist
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: web-pwa
           path: dist/
           retention-days: 30
 
-  # ── Android AAB (Play Store) ───────────────────────────────────────────────
+  # ── Android APK ────────────────────────────────────────────────────────────
   build-android:
-    name: Android AAB
+    name: Android APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - run: npm ci
-
-      - name: Build web assets
-        run: npm run build
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
-
+      - uses: android-actions/setup-android@v3
+      - run: npm install --legacy-peer-deps
+      - run: npm run build
+      - run: npx cap sync android
+      - run: chmod +x android/gradlew
       - name: Build debug APK
         run: ./gradlew assembleDebug
         working-directory: android
-
-      - name: Build release AAB
-        run: ./gradlew bundleRelease
-        working-directory: android
-
-      - name: Upload APK (debug)
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Upload AAB (release - unsigned)
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 30
-
-  # ── Windows Installer ─────────────────────────────────────────────────────
+  # ── Windows .exe ───────────────────────────────────────────────────────────
   build-windows:
-    name: Windows Installer
+    name: Windows EXE
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - run: npm ci
-
-      - name: Build web assets
-        run: npm run build
-
-      - name: Package Electron (Windows)
-        run: npm run package:electron
+      - run: npm install --legacy-peer-deps
+      - run: npm run build
+      - run: npm run package:electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: release/*.exe
           retention-days: 30
 
-  # ── macOS DMG ─────────────────────────────────────────────────────────────
+  # ── macOS DMG ──────────────────────────────────────────────────────────────
   build-macos:
     name: macOS DMG
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - run: npm ci
-
-      - name: Build web assets
-        run: npm run build
-
-      - name: Package Electron (macOS)
-        run: npm run package:electron
+      - run: npm install --legacy-peer-deps
+      - run: npm run build
+      - run: npm run package:electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: release/*.dmg
           retention-days: 30
 
-  # ── Linux AppImage ─────────────────────────────────────────────────────────
-  build-linux:
-    name: Linux AppImage
+  # ── GitHub Release ─────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: [build-web, build-android, build-windows, build-macos]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          path: artifacts/
 
-      - run: npm ci
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Build web assets
-        run: npm run build
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          name: Game Zone v${{ steps.version.outputs.version }} (Build ${{ github.run_number }})
+          body: |
+            ## Game Zone — PS4/PS5 Monitoring App
 
-      - name: Package Electron (Linux)
-        run: npm run package:electron
+            ### Downloads
+            - **Windows**: `windows-installer/` → `.exe` installer
+            - **macOS**: `macos-dmg/` → `.dmg` installer
+            - **Android**: `android-debug-apk/` → `.apk` file (install directly on Android)
+            - **Web PWA**: deployed automatically to Netlify
+
+            ### Install on Android
+            1. Download the `.apk` file
+            2. On your Android phone: Settings → Security → Allow unknown sources
+            3. Open the downloaded `.apk` to install
+          files: |
+            artifacts/windows-installer/*.exe
+            artifacts/macos-dmg/*.dmg
+            artifacts/android-debug-apk/*.apk
+          draft: false
+          prerelease: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage
-          path: release/*.AppImage
-          retention-days: 30
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
