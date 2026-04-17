@@ -175,24 +175,33 @@ export default function Consoles() {
     toast.success("Session started for " + name);
   };
 
-  // END — auto-calculate price from pricing rate (hourly_rate * hours played)
+  // END — flat session price from settings (not time-based)
   const handleEnd = async (c) => {
     const cs = getCS(c.id);
     if (!cs.activeStart) return;
 
     const secs = Math.floor((Date.now() - cs.activeStart) / 1000);
-    const durationMin = secs / 60;
 
+    // Flat price per session — same regardless of duration
     const rate = pricing.find((p) => p.console_type === c.type);
-    const price = rate
-      ? parseFloat((rate.hourly_rate * (durationMin / 60)).toFixed(2))
-      : 0;
+    const price = rate ? parseFloat((rate.hourly_rate).toFixed(2)) : 0;
+
+    // Wasted time = actual duration - standard game time (in minutes)
+    const durationMin = secs / 60;
+    const gameTimeMin = rate?.game_time_minutes || 0;
+    const wastedMin = gameTimeMin > 0 ? Math.max(0, Math.round(durationMin - gameTimeMin)) : 0;
+    // Price per minute = session_price / game_time_minutes
+    const pricePerMin = (gameTimeMin > 0 && price > 0) ? price / gameTimeMin : 0;
+    const wastedCost = parseFloat((wastedMin * pricePerMin).toFixed(2));
 
     const newRow = {
       name: cs.activePlayer,
       duration: formatDurationShort(secs),
       durationSecs: secs,
+      durationMin: Math.round(durationMin),
       price,
+      wastedMin,
+      wastedCost,
     };
 
     const activeSessions = await storageAdapter.entities.Session.filter({ status: "active" });
@@ -200,8 +209,10 @@ export default function Consoles() {
     if (active) {
       await storageAdapter.entities.Session.update(active.id, {
         end_time: new Date().toISOString(),
-        duration_minutes: Math.floor(durationMin),
+        duration_minutes: Math.floor(secs / 60),
         amount_charged: price,
+        wasted_minutes: wastedMin,
+        wasted_cost: wastedCost,
         status: "completed",
       });
     }
@@ -290,7 +301,7 @@ export default function Consoles() {
                 <div>
                   <span className={"text-xs font-bold px-2 py-1 rounded-full " + (c.type === "PS5" ? "bg-blue-600/30 text-blue-300" : "bg-purple-600/30 text-purple-300")}>{c.type}</span>
                   <h3 className="text-white font-bold text-lg mt-2">{c.name}</h3>
-                  {rate && <p className="text-game-muted text-xs mt-0.5">${rate.hourly_rate}/hr</p>}
+                  {rate && <p className="text-game-muted text-xs mt-0.5">{rate.hourly_rate} {rate.currency || "ETB"}/session</p>}
                 </div>
                 <div className={"w-3 h-3 rounded-full mt-1 " + (isActive ? "bg-blue-400 animate-pulse" : "bg-green-400")} />
               </div>
@@ -299,11 +310,6 @@ export default function Consoles() {
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center">
                   <p className="text-blue-300 text-xs font-medium mb-1">{cs.activePlayer}</p>
                   <p className="text-white font-mono font-bold text-2xl">{formatDuration(cs.activeSecs || 0)}</p>
-                  {rate && (
-                    <p className="text-blue-200 text-xs mt-1">
-                      {"~$" + (rate.hourly_rate * ((cs.activeSecs || 0) / 3600)).toFixed(2)}
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -320,10 +326,13 @@ export default function Consoles() {
               {hasRows && (
                 <div className="space-y-1">
                   {cs.sessionRows.map((row, i) => (
-                    <div key={i} className="grid grid-cols-3 gap-2 bg-game-bg border border-game-border rounded-lg px-3 py-2 text-xs">
+                    <div key={i} className="grid grid-cols-4 gap-1 bg-game-bg border border-game-border rounded-lg px-3 py-2 text-xs">
                       <span className="text-white font-medium truncate">{row.name}</span>
                       <span className="text-game-muted text-center">{row.duration}</span>
-                      <span className="text-green-400 font-bold text-right">${row.price.toFixed(2)}</span>
+                      <span className="text-green-400 font-bold text-center">{rate ? (rate.currency || "ETB") : ""} {row.price.toFixed(2)}</span>
+                      <span className={"font-bold text-right " + (row.wastedMin > 0 ? "text-red-400" : "text-game-muted")}>
+                        {row.wastedMin > 0 ? "+" + row.wastedMin + "m" : "—"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -421,8 +430,10 @@ export default function Consoles() {
           <div className="space-y-4 pt-2">
             {startDialog && pricing.find((p) => p.console_type === startDialog.type) && (
               <p className="text-game-muted text-xs">
-                Rate: <span className="text-white font-semibold">${pricing.find((p) => p.console_type === startDialog.type).hourly_rate}/hr</span>
-                {" \u2014 price auto-calculated on end"}
+                Session price: <span className="text-white font-semibold">
+                  {pricing.find((p) => p.console_type === startDialog.type).hourly_rate}
+                  {" "}{pricing.find((p) => p.console_type === startDialog.type).currency || "ETB"}/session
+                </span>
               </p>
             )}
             <div>

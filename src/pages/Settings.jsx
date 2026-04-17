@@ -16,6 +16,7 @@ export default function Settings() {
   const [promoteUid, setPromoteUid] = useState("");
   const [pricing, setPricing] = useState([]);
   const [rates, setRates] = useState({ PS5: "", PS4: "" });
+  const [gameTimes, setGameTimes] = useState({ PS5: "", PS4: "" });
   const [currency, setCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +26,7 @@ export default function Settings() {
       const ps5 = p.find((x) => x.console_type === "PS5");
       const ps4 = p.find((x) => x.console_type === "PS4");
       setRates({ PS5: ps5?.hourly_rate || "", PS4: ps4?.hourly_rate || "" });
+      setGameTimes({ PS5: ps5?.game_time_minutes || "", PS4: ps4?.game_time_minutes || "" });
       if (ps5?.currency) setCurrency(ps5.currency);
       setLoading(false);
     });
@@ -33,7 +35,7 @@ export default function Settings() {
   const save = async () => {
     for (const type of ["PS5", "PS4"]) {
       const existing = pricing.find((p) => p.console_type === type);
-      const data = { console_type: type, hourly_rate: parseFloat(rates[type]) || 0, currency };
+      const data = { console_type: type, hourly_rate: parseFloat(rates[type]) || 0, game_time_minutes: parseFloat(gameTimes[type]) || 0, currency };
       if (existing) {
         await storageAdapter.entities.Pricing.update(existing.id, data);
       } else {
@@ -59,34 +61,45 @@ export default function Settings() {
       <RoleGuard role="admin">
         <div data-tour="pricing-form" className="bg-game-surface border border-game-border rounded-xl p-6 space-y-5">
         <h3 className="text-white font-semibold flex items-center gap-2">
-          <DollarSign className="w-4 h-4 text-yellow-400" /> {t('settings.rates.title')}
+          <DollarSign className="w-4 h-4 text-yellow-400" /> Session Pricing
         </h3>
 
         <div data-tour="currency-field">
-          <label className="text-game-muted text-sm mb-1.5 block">{t('settings.currency.label')}</label>
+          <label className="text-game-muted text-sm mb-1.5 block">Currency</label>
           <Input
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
-            placeholder={t('settings.currency.placeholder')}
+            placeholder="e.g. ETB, USD"
             className="bg-game-bg border-game-border text-white w-32"
           />
         </div>
 
         {["PS5", "PS4"].map((type) => (
-          <div key={type}>
-            <label className="text-game-muted text-sm mb-1.5 block flex items-center gap-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                type === "PS5" ? "bg-blue-600/30 text-blue-300" : "bg-purple-600/30 text-purple-300"
-              }`}>{type}</span>
-              {t('settings.rate.label').replace('{type}', type).replace('{currency}', currency)}
-            </label>
-            <Input
-              type="number"
-              value={rates[type]}
-              onChange={(e) => setRates({ ...rates, [type]: e.target.value })}
-              placeholder={t('settings.rate.placeholder')}
-              className="bg-game-bg border-game-border text-white"
-            />
+          <div key={type} className="space-y-3 pb-3 border-b border-game-border last:border-0">
+            <div className="flex items-center gap-2">
+              <span className={"text-xs font-bold px-2 py-0.5 rounded-full " + (type === "PS5" ? "bg-blue-600/30 text-blue-300" : "bg-purple-600/30 text-purple-300")}>{type}</span>
+            </div>
+            <div>
+              <label className="text-game-muted text-sm mb-1.5 block">Session Price ({currency}/session)</label>
+              <Input
+                type="number"
+                value={rates[type]}
+                onChange={(e) => setRates({ ...rates, [type]: e.target.value })}
+                placeholder="e.g. 30"
+                className="bg-game-bg border-game-border text-white"
+              />
+            </div>
+            <div>
+              <label className="text-game-muted text-sm mb-1.5 block">Game Time (min/session)</label>
+              <Input
+                type="number"
+                value={gameTimes[type]}
+                onChange={(e) => setGameTimes({ ...gameTimes, [type]: e.target.value })}
+                placeholder="e.g. 5"
+                className="bg-game-bg border-game-border text-white"
+              />
+              <p className="text-game-muted text-xs mt-1">Standard time per game. Overtime beyond this is tracked as wasted time.</p>
+            </div>
           </div>
         ))}
 
@@ -97,15 +110,18 @@ export default function Settings() {
       </RoleGuard>
 
       <div className="bg-game-surface border border-game-border rounded-xl p-6">
-        <h3 className="text-white font-semibold mb-2">{t('settings.currentRates.title')}</h3>
+        <h3 className="text-white font-semibold mb-2">Current Session Prices</h3>
         {["PS5", "PS4"].map((type) => (
           <div key={type} className="flex justify-between py-2 border-b border-game-border last:border-0">
             <span className="text-game-muted text-sm">{type}</span>
-            <span className="text-white font-semibold">
-              {rates[type]
-                ? t('settings.currentRates.value').replace('{currency}', currency).replace('{rate}', parseFloat(rates[type]).toFixed(2))
-                : t('settings.currentRates.notSet')}
-            </span>
+            <div className="text-right">
+              <span className="text-white font-semibold">
+                {rates[type] ? currency + " " + parseFloat(rates[type]).toFixed(2) + " / session" : "Not set"}
+              </span>
+              {gameTimes[type] && (
+                <p className="text-game-muted text-xs">{gameTimes[type]} min / game</p>
+              )}
+            </div>
           </div>
         ))}
       </div>

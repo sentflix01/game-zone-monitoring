@@ -248,6 +248,56 @@ export default function Report() {
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* Wasted Time Session List */}
+      {(() => {
+        const wastedSessions = sessions
+          .filter((s) => s.status === "completed" && (s.wasted_minutes || 0) > 0)
+          .sort((a, b) => (b.wasted_minutes || 0) - (a.wasted_minutes || 0))
+          .slice(0, 50);
+
+        const totalWastedMin = sessions
+          .filter((s) => s.status === "completed")
+          .reduce((sum, s) => sum + (s.wasted_minutes || 0), 0);
+        const totalWastedCost = sessions
+          .filter((s) => s.status === "completed")
+          .reduce((sum, s) => sum + (s.wasted_cost || 0), 0);
+
+        return (
+          <div className="bg-game-surface border border-game-border rounded-xl p-5">
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+              <h3 className="text-white font-semibold">Wasted Time Report</h3>
+              <div className="flex gap-4 text-xs">
+                <span className="text-red-400 font-bold">Total overtime: {totalWastedMin}m</span>
+                <span className="text-orange-400 font-bold">Wasted cost: {totalWastedCost.toFixed(2)} ETB</span>
+              </div>
+            </div>
+            <p className="text-game-muted text-xs mb-4">Sessions where actual time exceeded the standard game time setting.</p>
+            {wastedSessions.length === 0 ? (
+              <p className="text-game-muted text-sm text-center py-6">No overtime sessions recorded yet.</p>
+            ) : (
+              <div className="space-y-1">
+                <div className="grid grid-cols-5 gap-2 px-3 py-1 text-xs text-game-muted font-medium border-b border-game-border">
+                  <span>Player</span>
+                  <span>Console</span>
+                  <span className="text-center">Duration</span>
+                  <span className="text-center text-red-400">Overtime</span>
+                  <span className="text-right text-orange-400">Wasted Cost</span>
+                </div>
+                {wastedSessions.map((s) => (
+                  <div key={s.id} className="grid grid-cols-5 gap-2 bg-game-bg border border-red-500/10 rounded-lg px-3 py-2 text-xs">
+                    <span className="text-white font-medium truncate">{s.player_name || "Anonymous"}</span>
+                    <span className="text-game-muted truncate">{s.console_name}</span>
+                    <span className="text-game-muted text-center">{s.duration_minutes || 0}m</span>
+                    <span className="text-red-400 font-bold text-center">+{s.wasted_minutes}m</span>
+                    <span className="text-orange-400 font-bold text-right">{(s.wasted_cost || 0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
