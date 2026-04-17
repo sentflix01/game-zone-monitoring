@@ -4,6 +4,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithCredential,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -12,38 +14,41 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { useTranslation } from '@/i18n/I18nContext';
 import { auth } from '@/lib/firebase';
-import { Mail, Chrome, ArrowLeft } from 'lucide-react';
+import { Mail, Chrome, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 const EMAIL_KEY = 'gamezone_email_signin';
 
-function getFirebaseErrorKey(code) {
+const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron === true;
+const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
+
+function getFirebaseErrorMessage(code) {
   switch (code) {
-    case 'auth/invalid-email':
-      return 'auth.error.invalidEmail';
-    case 'auth/too-many-requests':
-      return 'auth.error.tooManyRequests';
-    case 'auth/popup-closed-by-user':
-      return null;
-    case 'auth/network-request-failed':
-      return 'auth.error.networkError';
-    default:
-      return 'auth.error.googleFailed';
+    case 'auth/invalid-email': return 'Invalid email address.';
+    case 'auth/user-not-found': return 'No account found with this email.';
+    case 'auth/wrong-password': return 'Incorrect password.';
+    case 'auth/invalid-credential': return 'Incorrect email or password.';
+    case 'auth/email-already-in-use': return 'An account with this email already exists.';
+    case 'auth/weak-password': return 'Password must be at least 6 characters.';
+    case 'auth/too-many-requests': return 'Too many attempts. Please try again later.';
+    case 'auth/network-request-failed': return 'Network error. Check your connection.';
+    case 'auth/popup-closed-by-user': return null;
+    default: return 'Sign in failed. Please try again.';
   }
 }
-
 
 export default function Login() {
   const { isAuthenticated } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const [view, setView] = useState('login');
+  const [view, setView] = useState('login'); // 'login' | 'sent' | 'confirm'
   const [email, setEmail] = useState('');
-  const [confirmEmail, setConfirmEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const isOffline = !navigator.onLine;
 
   useEffect(() => {
@@ -57,8 +62,7 @@ export default function Login() {
             navigate('/');
           })
           .catch((err) => {
-            const key = getFirebaseErrorKey(err.code) || 'auth.error.otpLinkInvalid';
-            toast.error(t(key));
+            toast.error(getFirebaseErrorMessage(err.code) || 'Sign-in link invalid.');
           });
       } else {
         setView('confirm');
@@ -66,23 +70,43 @@ export default function Login() {
     }
   }, []);
 
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to="/" replace />;
+
+  async function handleEmailPassword(e) {
+    e.preventDefault();
+    if (!email || !password) return;
+    setLoading(true);
+    try {
+      if (isRegister) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      navigate('/');
+    } catch (err) {
+      const msg = getFirebaseErrorMessage(err.code);
+      if (msg) toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSendLink(e) {
     e.preventDefault();
     setLoading(true);
     try {
+      const redirectUrl = isElectron
+        ? 'https://gamezone-25531.firebaseapp.com/__/auth/action'
+        : window.location.href;
       await sendSignInLinkToEmail(auth, email, {
-        url: window.location.href,
+        url: redirectUrl,
         handleCodeInApp: true,
       });
       localStorage.setItem(EMAIL_KEY, email);
       setView('sent');
     } catch (err) {
-      const key = getFirebaseErrorKey(err.code);
-      if (key) toast.error(t(key));
+      const msg = getFirebaseErrorMessage(err.code);
+      if (msg) toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -92,11 +116,10 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      await signInWithEmailLink(auth, confirmEmail, window.location.href);
+      await signInWithEmailLink(auth, email, window.location.href);
       navigate('/');
     } catch (err) {
-      const key = getFirebaseErrorKey(err.code) || 'auth.error.otpLinkInvalid';
-      toast.error(t(key));
+      toast.error(getFirebaseErrorMessage(err.code) || 'Sign-in link invalid.');
     } finally {
       setLoading(false);
     }
@@ -105,8 +128,7 @@ export default function Login() {
   async function handleGoogleSignIn() {
     setLoading(true);
     try {
-      const isNative = window.Capacitor?.isNativePlatform?.();
-      if (isNative) {
+      if (isCapacitor) {
         const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
         const googleUser = await GoogleAuth.signIn();
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
@@ -116,8 +138,8 @@ export default function Login() {
         await signInWithPopup(auth, provider);
       }
     } catch (err) {
-      const key = getFirebaseErrorKey(err.code);
-      if (key) toast.error(t(key));
+      const msg = getFirebaseErrorMessage(err.code);
+      if (msg) toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -129,64 +151,106 @@ export default function Login() {
         <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <span className="text-white text-2xl font-bold">PS</span>
         </div>
-        <h1 className="text-2xl font-bold text-white">
-          {t('auth.login.title')}
-        </h1>
-        <p className="text-game-muted mt-1 text-sm">
-          {t('auth.login.subtitle')}
-        </p>
+        <h1 className="text-2xl font-bold text-white">Sign In</h1>
+        <p className="text-game-muted mt-1 text-sm">Sign in to access Game Zone</p>
       </div>
 
       {isOffline && (
         <div className="w-full max-w-sm mb-4 bg-yellow-900/40 border border-yellow-700 text-yellow-300 text-sm rounded-lg px-4 py-3 text-center">
-          {t('auth.offline.message')}
+          You are offline. Please connect to the internet to sign in.
         </div>
       )}
 
-      <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6">
+      <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6 space-y-4">
         {view === 'login' && (
           <>
-            <form onSubmit={handleSendLink} className="space-y-4" data-testid="login-form">
+            {/* Email + Password — works on all platforms */}
+            <form onSubmit={handleEmailPassword} className="space-y-3">
               <div>
-                <label className="block text-sm text-game-muted mb-1">
-                  {t('auth.login.emailLabel')}
-                </label>
+                <label className="block text-sm text-game-muted mb-1">Email</label>
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t('auth.login.emailPlaceholder')}
+                  placeholder="you@example.com"
                   required
                   disabled={loading || isOffline}
-                  className="bg-game-bg border-game-border text-white placeholder:text-game-muted"
+                  className="bg-game-bg border-game-border text-white"
                 />
+              </div>
+              <div>
+                <label className="block text-sm text-game-muted mb-1">Password</label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    disabled={loading || isOffline}
+                    className="bg-game-bg border-game-border text-white pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <Button
                 type="submit"
                 disabled={loading || isOffline}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white"
               >
-                <Mail className="w-4 h-4 mr-2" />
-                {t('auth.otp.sendButton')}
+                {loading ? "Please wait..." : (isRegister ? "Create Account" : "Sign In")}
               </Button>
             </form>
 
-            <div className="flex items-center my-5 gap-3">
+            <button
+              type="button"
+              onClick={() => setIsRegister(!isRegister)}
+              className="w-full text-center text-game-muted text-xs hover:text-white transition-colors"
+            >
+              {isRegister ? "Already have an account? Sign in" : "No account? Create one"}
+            </button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-game-border" />
-              <span className="text-game-muted text-xs">{t('auth.login.orDivider')}</span>
+              <span className="text-game-muted text-xs">or</span>
               <div className="flex-1 h-px bg-game-border" />
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGoogleSignIn}
-              disabled={loading || isOffline}
-              className="w-full border-game-border text-white hover:bg-game-bg"
-            >
-              <Chrome className="w-4 h-4 mr-2" />
-              {t('auth.login.googleButton')}
-            </Button>
+            {/* Magic link — web only (doesn't work in Electron) */}
+            {!isElectron && (
+              <form onSubmit={handleSendLink}>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={loading || isOffline || !email}
+                  className="w-full border-game-border text-white hover:bg-game-bg"
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  Send Sign-in Link
+                </Button>
+              </form>
+            )}
+
+            {/* Google — web + Android only */}
+            {!isElectron && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGoogleSignIn}
+                disabled={loading || isOffline}
+                className="w-full border-game-border text-white hover:bg-game-bg"
+              >
+                <Chrome className="w-4 h-4 mr-2" />
+                Continue with Google
+              </Button>
+            )}
           </>
         )}
 
@@ -195,52 +259,29 @@ export default function Login() {
             <div className="w-14 h-14 bg-green-900/40 rounded-full flex items-center justify-center mx-auto">
               <Mail className="w-7 h-7 text-green-400" />
             </div>
-            <h2 className="text-lg font-semibold text-white">
-              {t('auth.otp.sentTitle')}
-            </h2>
-            <p className="text-game-muted text-sm">
-              {t('auth.otp.sentBody').replace('{email}', email)}
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setView('login')}
-              className="w-full text-game-muted hover:text-white"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              {t('auth.login.backToLogin')}
+            <h2 className="text-lg font-semibold text-white">Check your email</h2>
+            <p className="text-game-muted text-sm">We sent a sign-in link to <span className="text-white">{email}</span>. Click it to sign in.</p>
+            <Button type="button" variant="ghost" onClick={() => setView('login')} className="w-full text-game-muted hover:text-white">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to sign in
             </Button>
           </div>
         )}
 
         {view === 'confirm' && (
-          <form onSubmit={handleConfirmLink} className="space-y-4" data-testid="confirm-form">
-            <h2 className="text-lg font-semibold text-white">
-              {t('auth.otp.confirmTitle')}
-            </h2>
-            <p className="text-game-muted text-sm">
-              {t('auth.otp.confirmSubtitle')}
-            </p>
-            <div>
-              <label className="block text-sm text-game-muted mb-1">
-                {t('auth.otp.confirmEmailLabel')}
-              </label>
-              <Input
-                type="email"
-                value={confirmEmail}
-                onChange={(e) => setConfirmEmail(e.target.value)}
-                placeholder={t('auth.login.emailPlaceholder')}
-                required
-                disabled={loading}
-                className="bg-game-bg border-game-border text-white placeholder:text-game-muted"
-              />
-            </div>
-            <Button
-              type="submit"
+          <form onSubmit={handleConfirmLink} className="space-y-4">
+            <h2 className="text-lg font-semibold text-white">Confirm your email</h2>
+            <p className="text-game-muted text-sm">Enter the email you used to request the sign-in link.</p>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {t('auth.otp.confirmButton')}
+              className="bg-game-bg border-game-border text-white"
+            />
+            <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white">
+              Confirm & Sign In
             </Button>
           </form>
         )}
