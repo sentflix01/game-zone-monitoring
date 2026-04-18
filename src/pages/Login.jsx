@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithCredential,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from 'firebase/auth';
@@ -58,6 +59,13 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
 
+  // Handle redirect result (Android after Google sign-in)
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => { if (result?.user) navigate('/'); })
+      .catch(() => {});
+  }, []);
+
   if (isAuthenticated) return <Navigate to="/" replace />;
 
   async function handleEmailPassword(e) {
@@ -86,15 +94,13 @@ export default function Login() {
       provider.setCustomParameters({ prompt: 'select_account' });
 
       if (isCapacitor) {
-        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
-        const googleUser = await GoogleAuth.signIn();
-        const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
-        await signInWithCredential(auth, credential);
+        // Android — signInWithPopup doesn't work in WebView, use redirect
+        await signInWithRedirect(auth, provider);
+        // getRedirectResult is handled in useEffect below
       } else {
         await signInWithPopup(auth, provider);
+        navigate('/');
       }
-      // Force navigate — don't rely solely on onAuthStateChanged
-      navigate('/');
     } catch (err) {
       const msg = getErrorMessage(err.code);
       if (msg) toast.error(msg);
