@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -10,19 +10,35 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-let app;
+// Check all required vars are present
+const missingVars = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID']
+  .filter((k) => !import.meta.env[k]);
+
 let auth;
 
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-} catch (err) {
-  console.error('[firebase] init failed:', err.message);
-  // Provide a stub so the app doesn't crash on import
+if (missingVars.length > 0) {
+  console.error('[firebase] Missing env vars:', missingVars.join(', '));
+  // Stub — app will show login but auth won't work
   auth = {
     currentUser: null,
     onAuthStateChanged: (cb) => { cb(null); return () => {}; },
+    signOut: () => Promise.resolve(),
   };
+} else {
+  try {
+    // Prevent duplicate app initialization
+    const app = getApps().length === 0
+      ? initializeApp(firebaseConfig)
+      : getApps()[0];
+    auth = getAuth(app);
+  } catch (err) {
+    console.error('[firebase] init failed:', err.message);
+    auth = {
+      currentUser: null,
+      onAuthStateChanged: (cb) => { cb(null); return () => {}; },
+      signOut: () => Promise.resolve(),
+    };
+  }
 }
 
 export { auth };

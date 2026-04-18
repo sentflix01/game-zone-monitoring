@@ -6,6 +6,7 @@ const {
   dialog,
   session,
   ipcMain,
+  screen,
 } = require('electron');
 const path = require('path');
 
@@ -14,10 +15,14 @@ let mainWindow;
 // ── Window creation ──────────────────────────────────────────────────────────
 
 function createWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  const winWidth = Math.min(1400, Math.max(1000, width));
+  const winHeight = Math.min(900, Math.max(700, height));
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 900,
+    width: winWidth,
+    height: winHeight,
+    minWidth: 800,
     minHeight: 600,
     webPreferences: {
       contextIsolation: true,

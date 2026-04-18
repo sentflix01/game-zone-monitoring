@@ -18,9 +18,13 @@ vi.mock('@/lib/firebase', () => ({
 
 // Mock firebase/auth
 vi.mock('firebase/auth', () => ({
-  GoogleAuthProvider: vi.fn().mockImplementation(() => ({})),
+  GoogleAuthProvider: vi.fn().mockImplementation(() => ({ setCustomParameters: vi.fn() })),
   signInWithPopup: vi.fn(),
+  signInWithRedirect: vi.fn(),
+  getRedirectResult: vi.fn().mockResolvedValue(null),
   signInWithCredential: vi.fn(),
+  signInWithEmailAndPassword: vi.fn(),
+  createUserWithEmailAndPassword: vi.fn(),
   sendSignInLinkToEmail: vi.fn(),
   isSignInWithEmailLink: vi.fn().mockReturnValue(false),
   signInWithEmailLink: vi.fn(),
@@ -88,7 +92,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Login page unit tests', () => {
-  it('renders email input and "Send Sign-in Link" button when unauthenticated', () => {
+  it('renders email input and sign-in button when unauthenticated', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -105,22 +109,19 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
-    expect(getByPlaceholderText('auth.login.emailPlaceholder')).toBeTruthy();
-    expect(getByText('auth.otp.sendButton')).toBeTruthy();
-    expect(getByText('auth.login.googleButton')).toBeTruthy();
+    expect(getByPlaceholderText('you@example.com')).toBeTruthy();
+    expect(getByText('Continue with Gmail')).toBeTruthy();
   });
 
-  it('shows offline message when navigator.onLine is false', () => {
+  it('shows loading spinner when auth is loading', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
-      isLoadingAuth: false,
+      isLoadingAuth: true,
       user: null,
       role: null,
     });
 
-    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-
-    const { getByText } = render(
+    const { container } = render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -129,8 +130,7 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
-    expect(getByText('auth.offline.message')).toBeTruthy();
-
-    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    // Should show spinner, not login form
+    expect(container.querySelector('.animate-spin')).toBeTruthy();
   });
 });

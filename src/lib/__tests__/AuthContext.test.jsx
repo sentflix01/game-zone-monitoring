@@ -5,7 +5,9 @@ import * as fc from 'fast-check';
 
 // Mock ./firebase before importing AuthContext
 vi.mock('../firebase', () => ({
-  auth: {},
+  auth: {
+    onAuthStateChanged: (...args) => mockOnAuthStateChanged(...args),
+  },
 }));
 
 // We'll set up the firebase/auth mock with controllable callbacks

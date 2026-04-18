@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { tourPages } from '@/i18n/tourSteps';
 import TourTooltip from '@/components/TourTooltip';
 import HelpButton from '@/components/HelpButton';
+import { useAuth } from '@/lib/AuthContext';
 
 const STORAGE_KEY = 'tour_completed';
 
@@ -11,6 +12,7 @@ export const TourContext = createContext(null);
 export function TourProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
 
   const [state, setState] = useState({
     isActive: false,
@@ -18,24 +20,26 @@ export function TourProvider({ children }) {
     currentStepIndex: 0,
   });
 
-  // Auto-start on first visit — only when authenticated and not on login page
+  // Auto-start only when: authenticated, on dashboard, tour not completed
   useEffect(() => {
+    if (isLoadingAuth || !isAuthenticated) return;
+    if (location.pathname !== '/') return;
     try {
-      if (!localStorage.getItem(STORAGE_KEY) &&
-          location.pathname !== '/login' &&
-          location.pathname !== '/') {
-        // Delay slightly to ensure the page has rendered
-        setTimeout(() => {
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        const timer = setTimeout(() => {
           setState({ isActive: true, currentPageIndex: 0, currentStepIndex: 0 });
-        }, 1000);
+        }, 1500);
+        return () => clearTimeout(timer);
       }
     } catch { /* private browsing */ }
-  }, [location.pathname]);
+  }, [isAuthenticated, isLoadingAuth, location.pathname]);
 
   const startTour = useCallback(() => {
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }
     navigate('/');
-    setState({ isActive: true, currentPageIndex: 0, currentStepIndex: 0 });
+    setTimeout(() => {
+      setState({ isActive: true, currentPageIndex: 0, currentStepIndex: 0 });
+    }, 300);
   }, [navigate]);
 
   const startPageTour = useCallback((pageKey) => {
@@ -53,19 +57,13 @@ export function TourProvider({ children }) {
     setState((s) => {
       const page = tourPages[s.currentPageIndex];
       if (!page) return s;
-
-      // Not last step of this page
       if (s.currentStepIndex < page.steps.length - 1) {
         return { ...s, currentStepIndex: s.currentStepIndex + 1 };
       }
-
-      // Last step of last page → finish
       if (s.currentPageIndex >= tourPages.length - 1) {
         try { localStorage.setItem(STORAGE_KEY, 'true'); } catch { /* */ }
         return { ...s, isActive: false };
       }
-
-      // Advance to next page
       const nextPageIndex = s.currentPageIndex + 1;
       navigate(tourPages[nextPageIndex].path);
       return { isActive: true, currentPageIndex: nextPageIndex, currentStepIndex: 0 };
@@ -74,49 +72,45 @@ export function TourProvider({ children }) {
 
   const prevStep = useCallback(() => {
     setState((s) => {
-      // Not first step of this page — go back within page
-      if (s.currentStepIndex > 0) {
-        return { ...s, currentStepIndex: s.currentStepIndex - 1 };
-      }
-      // First step of first page — nothing to go back to
+      if (s.currentStepIndex > 0) return { ...s, currentStepIndex: s.currentStepIndex - 1 };
       if (s.currentPageIndex === 0) return s;
-      // First step of a later page — go to previous page's last step
       const prevPageIndex = s.currentPageIndex - 1;
       const prevPage = tourPages[prevPageIndex];
       navigate(prevPage.path);
-      return {
-        isActive: true,
-        currentPageIndex: prevPageIndex,
-        currentStepIndex: prevPage.steps.length - 1,
-      };
+      return { isActive: true, currentPageIndex: prevPageIndex, currentStepIndex: prevPage.steps.length - 1 };
     });
   }, [navigate]);
 
-  const restartTour = useCallback(() => {
-    startTour();
-  }, [startTour]);
+  const restartTour = useCallback(() => startTour(), [startTour]);
 
   const currentPage = tourPages[state.currentPageIndex];
   const currentStep = currentPage?.steps[state.currentStepIndex];
   const totalSteps = currentPage?.steps.length ?? 0;
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
+    isActive: state.isActive,
+    currentPageIndex: state.currentPageIndex,
+    currentStepIndex: state.currentStepIndex,
+    currentStep,
+    totalSteps,
+    startTour,
+    startPageTour,
+    nextStep,
+    prevStep,
+    skipTour,
+    restartTour,
+  }), [state, currentStep, totalSteps, startTour, startPageTour, nextStep, prevStep, skipTour, restartTour]);
+
+  const showTour = state.isActive && currentStep &&
+    location.pathname !== '/login' &&
+    isAuthenticated;
+
   return (
-    <TourContext.Provider value={{
-      isActive: state.isActive,
-      currentPageIndex: state.currentPageIndex,
-      currentStepIndex: state.currentStepIndex,
-      currentStep,
-      totalSteps,
-      startTour,
-      startPageTour,
-      nextStep,
-      prevStep,
-      skipTour,
-      restartTour,
-    }}>
+    <TourContext.Provider value={value}>
       {children}
-      <HelpButton currentPath={location.pathname} />
-      {state.isActive && currentStep && location.pathname !== '/login' && <TourTooltip />}
+      {isAuthenticated && <HelpButton currentPath={location.pathname} />}
+      {showTour && <TourTooltip />}
     </TourContext.Provider>
   );
 }
