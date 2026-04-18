@@ -30,13 +30,13 @@ function createWindow() {
     // Production: load the built bundle via file://
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 
-    // Content-Security-Policy for production
+    // Permissive CSP — allows Firebase auth, Google OAuth, and all required connections
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
           'Content-Security-Policy': [
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: wss:; font-src 'self' data:;",
+            "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: wss:;",
           ],
         },
       });
@@ -47,20 +47,29 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
-  // Open external links in the system default browser
+  // Allow Firebase OAuth popups to open in a new window
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://accounts.google.com') ||
+        url.startsWith('https://') && url.includes('firebaseapp.com')) {
+      return { action: 'allow' }; // open as popup window for OAuth
+    }
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
+  // Don't block Firebase auth redirects
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const appUrl = app.isPackaged
       ? `file://${path.join(__dirname, '..', 'dist')}`
       : 'http://localhost:5173';
-    if (!url.startsWith(appUrl)) {
-      event.preventDefault();
-      shell.openExternal(url);
+    // Allow file:// navigation and Firebase auth callbacks
+    if (url.startsWith(appUrl) ||
+        url.includes('firebaseapp.com/__/auth') ||
+        url.startsWith('file://')) {
+      return; // allow
     }
+    event.preventDefault();
+    shell.openExternal(url);
   });
 
   mainWindow.on('closed', () => {

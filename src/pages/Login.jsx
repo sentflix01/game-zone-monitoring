@@ -1,10 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -60,13 +58,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
 
-  // Handle redirect result after Google sign-in on Electron
-  useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => { if (result?.user) navigate('/'); })
-      .catch(() => {});
-  }, []);
-
   if (isAuthenticated) return <Navigate to="/" replace />;
 
   async function handleEmailPassword(e) {
@@ -95,20 +86,23 @@ export default function Login() {
       provider.setCustomParameters({ prompt: 'select_account' });
 
       if (isCapacitor) {
+        // Native Android — use Capacitor Google Auth plugin
         const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
         const googleUser = await GoogleAuth.signIn();
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
         await signInWithCredential(auth, credential);
         navigate('/');
-      } else if (isElectron) {
-        await signInWithRedirect(auth, provider);
       } else {
+        // Web and Electron — use popup (Electron allows popups via setWindowOpenHandler)
         await signInWithPopup(auth, provider);
         navigate('/');
       }
     } catch (err) {
       const msg = getErrorMessage(err.code);
       if (msg) toast.error(msg);
+      else if (err.code && err.code !== 'auth/popup-closed-by-user') {
+        toast.error('Gmail sign-in failed. Please use email/password instead.');
+      }
     } finally {
       setGmailLoading(false);
     }
