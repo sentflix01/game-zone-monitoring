@@ -18,14 +18,19 @@ export function TourProvider({ children }) {
     currentStepIndex: 0,
   });
 
-  // Auto-start on first visit (only when inside the app, not on login page)
+  // Auto-start on first visit — only when authenticated and not on login page
   useEffect(() => {
     try {
-      if (!localStorage.getItem(STORAGE_KEY) && location.pathname !== '/login') {
-        setState({ isActive: true, currentPageIndex: 0, currentStepIndex: 0 });
+      if (!localStorage.getItem(STORAGE_KEY) &&
+          location.pathname !== '/login' &&
+          location.pathname !== '/') {
+        // Delay slightly to ensure the page has rendered
+        setTimeout(() => {
+          setState({ isActive: true, currentPageIndex: 0, currentStepIndex: 0 });
+        }, 1000);
       }
     } catch { /* private browsing */ }
-  }, []);
+  }, [location.pathname]);
 
   const startTour = useCallback(() => {
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }

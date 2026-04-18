@@ -49,7 +49,7 @@ function GmailIcon() {
 }
 
 export default function Login() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -65,6 +65,14 @@ export default function Login() {
       .then((result) => { if (result?.user) navigate('/'); })
       .catch(() => {});
   }, []);
+
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-game-bg flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (isAuthenticated) return <Navigate to="/" replace />;
 
