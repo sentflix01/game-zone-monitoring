@@ -14,6 +14,12 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
+    // If auth is a stub (Firebase failed to init), mark as not loading
+    if (!auth || typeof auth.onAuthStateChanged !== 'function') {
+      setIsLoadingAuth(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         let storedRole = localStorage.getItem(ROLE_KEY);

@@ -86,17 +86,15 @@ export default function Login() {
       provider.setCustomParameters({ prompt: 'select_account' });
 
       if (isCapacitor) {
-        // Native Android — use Capacitor Google Auth plugin
         const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
         const googleUser = await GoogleAuth.signIn();
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
         await signInWithCredential(auth, credential);
-        navigate('/');
       } else {
-        // Web and Electron — use popup (Electron allows popups via setWindowOpenHandler)
         await signInWithPopup(auth, provider);
-        navigate('/');
       }
+      // Force navigate — don't rely solely on onAuthStateChanged
+      navigate('/');
     } catch (err) {
       const msg = getErrorMessage(err.code);
       if (msg) toast.error(msg);
