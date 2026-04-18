@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signInWithEmailAndPassword,
@@ -15,8 +14,11 @@ import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron === true;
-const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
+// signInWithRedirect works on ALL platforms:
+// - Web: redirects to Google, comes back to the same URL
+// - Android (Capacitor): redirects within WebView
+// - Electron: redirects within the app window
+// signInWithPopup fails on packaged apps because the domain isn't authorized
 
 function getErrorMessage(code) {
   switch (code) {
@@ -28,13 +30,11 @@ function getErrorMessage(code) {
     case 'auth/weak-password': return 'Password must be at least 6 characters.';
     case 'auth/too-many-requests': return 'Too many attempts. Try again later.';
     case 'auth/network-request-failed': return 'Network error. Check your connection.';
-    case 'auth/popup-closed-by-user': return null;
-    case 'auth/popup-blocked': return 'Popup blocked. Please allow popups and try again.';
+    case 'auth/unauthorized-domain': return 'This app domain is not authorized. Contact support.';
     default: return null;
   }
 }
 
-// Gmail SVG icon
 function GmailIcon() {
   return (
     <svg viewBox="0 0 48 48" width="22" height="22">
@@ -58,15 +58,27 @@ export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
+  const [redirectChecked, setRedirectChecked] = useState(false);
 
-  // Handle redirect result (Android after Google sign-in)
+  // Check for redirect result on mount — handles return from Google sign-in
   useEffect(() => {
     getRedirectResult(auth)
-      .then((result) => { if (result?.user) navigate('/'); })
-      .catch(() => {});
+      .then((result) => {
+        if (result?.user) {
+          navigate('/');
+        }
+      })
+      .catch((err) => {
+        const msg = getErrorMessage(err?.code);
+        if (msg) toast.error(msg);
+      })
+      .finally(() => {
+        setRedirectChecked(true);
+      });
   }, []);
 
-  if (isLoadingAuth) {
+  // Show spinner while checking auth state OR waiting for redirect result
+  if (isLoadingAuth || !redirectChecked) {
     return (
       <div className="min-h-screen bg-game-bg flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
@@ -100,29 +112,18 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-
-      if (isCapacitor) {
-        // Android — signInWithPopup doesn't work in WebView, use redirect
-        await signInWithRedirect(auth, provider);
-        // getRedirectResult is handled in useEffect below
-      } else {
-        await signInWithPopup(auth, provider);
-        navigate('/');
-      }
+      // Use redirect on ALL platforms — most reliable for packaged apps
+      await signInWithRedirect(auth, provider);
+      // Page will redirect to Google, then come back — getRedirectResult handles it
     } catch (err) {
-      const msg = getErrorMessage(err.code);
-      if (msg) toast.error(msg);
-      else if (err.code && err.code !== 'auth/popup-closed-by-user') {
-        toast.error('Gmail sign-in failed. Please use email/password instead.');
-      }
-    } finally {
+      const msg = getErrorMessage(err.code) || 'Gmail sign-in failed. Please use email/password.';
+      toast.error(msg);
       setGmailLoading(false);
     }
   }
 
   return (
     <div className="min-h-screen bg-game-bg flex flex-col items-center justify-center px-4">
-      {/* Logo */}
       <div className="mb-8 text-center">
         <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-600/30">
           <span className="text-white text-2xl font-bold">PS</span>
@@ -133,7 +134,7 @@ export default function Login() {
 
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6 space-y-5">
 
-        {/* Gmail button */}
+        {/* Gmail / Google redirect button */}
         <button
           type="button"
           onClick={handleGmailLogin}
@@ -142,18 +143,16 @@ export default function Login() {
         >
           <GmailIcon />
           <span className="flex-1 text-center text-gray-800 font-semibold">
-            {gmailLoading ? 'Opening Gmail...' : 'Continue with Gmail'}
+            {gmailLoading ? 'Redirecting to Google...' : 'Continue with Gmail'}
           </span>
         </button>
 
-        {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-game-border" />
           <span className="text-game-muted text-xs">or sign in with email</span>
           <div className="flex-1 h-px bg-game-border" />
         </div>
 
-        {/* Email + Password */}
         <form onSubmit={handleEmailPassword} className="space-y-3">
           <Input
             type="email"

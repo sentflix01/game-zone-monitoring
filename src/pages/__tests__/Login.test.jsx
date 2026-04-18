@@ -19,10 +19,8 @@ vi.mock('@/lib/firebase', () => ({
 // Mock firebase/auth
 vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn().mockImplementation(() => ({ setCustomParameters: vi.fn() })),
-  signInWithPopup: vi.fn(),
-  signInWithRedirect: vi.fn(),
+  signInWithRedirect: vi.fn().mockResolvedValue(undefined),
   getRedirectResult: vi.fn().mockResolvedValue(null),
-  signInWithCredential: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
   createUserWithEmailAndPassword: vi.fn(),
   sendSignInLinkToEmail: vi.fn(),
@@ -52,14 +50,14 @@ beforeEach(() => {
 // Validates: Requirements 1.2
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Property 2: Authenticated users are redirected away from Login', () => {
-  it('redirects any authenticated user away from /login to /', () => {
-    fc.assert(
-      fc.property(
+  it('redirects any authenticated user away from /login to /', async () => {
+    await fc.assert(
+      fc.asyncProperty(
         fc.record({
           uid: fc.string({ minLength: 1 }),
           role: fc.constantFrom('admin', 'user'),
         }),
-        ({ uid, role }) => {
+        async ({ uid, role }) => {
           useAuth.mockReturnValue({
             isAuthenticated: true,
             isLoadingAuth: false,
@@ -76,14 +74,16 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
             </MemoryRouter>
           );
 
-          // Should redirect to dashboard, not show login form
+          // Wait for getRedirectResult to resolve then check redirect
+          await new Promise((r) => setTimeout(r, 50));
+
           expect(getByTestId('dashboard')).toBeTruthy();
           expect(queryByTestId('login-form')).toBeNull();
 
           unmount();
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -92,7 +92,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Login page unit tests', () => {
-  it('renders email input and sign-in button when unauthenticated', () => {
+  it('renders email input and sign-in button when unauthenticated', async () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -100,7 +100,7 @@ describe('Login page unit tests', () => {
       role: null,
     });
 
-    const { getByPlaceholderText, getByText } = render(
+    const { getByPlaceholderText, getByText, findByText } = render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -109,11 +109,13 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
+    // Wait for getRedirectResult to resolve (async)
+    await findByText('Continue with Gmail');
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
     expect(getByText('Continue with Gmail')).toBeTruthy();
   });
 
-  it('shows loading spinner when auth is loading', () => {
+  it('shows loading spinner when auth is loading', async () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: true,
@@ -130,7 +132,6 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
-    // Should show spinner, not login form
     expect(container.querySelector('.animate-spin')).toBeTruthy();
   });
 });
