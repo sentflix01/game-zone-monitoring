@@ -3,7 +3,9 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
+  signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from 'firebase/auth';
@@ -14,11 +16,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-// signInWithRedirect works on ALL platforms:
-// - Web: redirects to Google, comes back to the same URL
-// - Android (Capacitor): redirects within WebView
-// - Electron: redirects within the app window
-// signInWithPopup fails on packaged apps because the domain isn't authorized
+const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
 
 function getErrorMessage(code) {
   switch (code) {
@@ -112,9 +110,24 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      // Use redirect on ALL platforms — most reliable for packaged apps
-      await signInWithRedirect(auth, provider);
-      // Page will redirect to Google, then come back — getRedirectResult handles it
+
+      if (isCapacitor) {
+        // Android native — use Capacitor Google Auth plugin for reliable OAuth
+        try {
+          const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+          const googleUser = await GoogleAuth.signIn();
+          const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+          await signInWithCredential(auth, credential);
+          navigate('/');
+        } catch (pluginErr) {
+          // Fallback to redirect if plugin fails
+          await signInWithRedirect(auth, provider);
+        }
+      } else {
+        // Web and Electron — use redirect (most reliable for packaged apps)
+        await signInWithRedirect(auth, provider);
+        // Page redirects to Google then returns — getRedirectResult handles it on mount
+      }
     } catch (err) {
       const msg = getErrorMessage(err.code) || 'Gmail sign-in failed. Please use email/password.';
       toast.error(msg);
