@@ -9,9 +9,17 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 500,
+      launchAutoHide: true,
       backgroundColor: '#0f172a',
       showSpinner: false,
+      androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP',
+    },
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: '562421960778-vm9t.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true,
     },
   },
 };

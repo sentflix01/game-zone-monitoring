@@ -1,10 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
-  signInWithRedirect,
   signInWithPopup,
-  getRedirectResult,
   signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -28,7 +26,9 @@ function getErrorMessage(code) {
     case 'auth/weak-password': return 'Password must be at least 6 characters.';
     case 'auth/too-many-requests': return 'Too many attempts. Try again later.';
     case 'auth/network-request-failed': return 'Network error. Check your connection.';
-    case 'auth/unauthorized-domain': return 'This app domain is not authorized. Contact support.';
+    case 'auth/popup-closed-by-user': return null;
+    case 'auth/popup-blocked': return 'Popup was blocked. Please allow popups.';
+    case 'auth/unauthorized-domain': return 'Domain not authorized. Contact support.';
     default: return null;
   }
 }
@@ -56,27 +56,8 @@ export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
-  const [redirectChecked, setRedirectChecked] = useState(false);
 
-  // Check for redirect result on mount — handles return from Google sign-in
-  useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          navigate('/');
-        }
-      })
-      .catch((err) => {
-        const msg = getErrorMessage(err?.code);
-        if (msg) toast.error(msg);
-      })
-      .finally(() => {
-        setRedirectChecked(true);
-      });
-  }, []);
-
-  // Show spinner while checking auth state OR waiting for redirect result
-  if (isLoadingAuth || !redirectChecked) {
+  if (isLoadingAuth) {
     return (
       <div className="min-h-screen bg-game-bg flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
@@ -88,13 +69,13 @@ export default function Login() {
 
   async function handleEmailPassword(e) {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!email.trim() || !password) return;
     setLoading(true);
     try {
       if (isRegister) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, email.trim(), password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email.trim(), password);
       }
       navigate('/');
     } catch (err) {
@@ -112,25 +93,24 @@ export default function Login() {
       provider.setCustomParameters({ prompt: 'select_account' });
 
       if (isCapacitor) {
-        // Android native — use Capacitor Google Auth plugin for reliable OAuth
-        try {
-          const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
-          const googleUser = await GoogleAuth.signIn();
-          const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
-          await signInWithCredential(auth, credential);
-          navigate('/');
-        } catch (pluginErr) {
-          // Fallback to redirect if plugin fails
-          await signInWithRedirect(auth, provider);
-        }
+        // Android — use native Capacitor Google Auth plugin
+        // This shows a native Google account picker popup
+        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+        const googleUser = await GoogleAuth.signIn();
+        const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+        await signInWithCredential(auth, credential);
+        navigate('/');
       } else {
-        // Web and Electron — use redirect (most reliable for packaged apps)
-        await signInWithRedirect(auth, provider);
-        // Page redirects to Google then returns — getRedirectResult handles it on mount
+        // Web / Electron — use popup (shows Google account picker in a popup window)
+        const result = await signInWithPopup(auth, provider);
+        if (result?.user) navigate('/');
       }
     } catch (err) {
-      const msg = getErrorMessage(err.code) || 'Gmail sign-in failed. Please use email/password.';
-      toast.error(msg);
+      if (err.code !== 'auth/popup-closed-by-user') {
+        const msg = getErrorMessage(err.code) || 'Gmail sign-in failed. Please use email/password.';
+        toast.error(msg);
+      }
+    } finally {
       setGmailLoading(false);
     }
   }
@@ -147,7 +127,7 @@ export default function Login() {
 
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6 space-y-5">
 
-        {/* Gmail / Google redirect button */}
+        {/* Gmail popup button */}
         <button
           type="button"
           onClick={handleGmailLogin}
@@ -156,7 +136,7 @@ export default function Login() {
         >
           <GmailIcon />
           <span className="flex-1 text-center text-gray-800 font-semibold">
-            {gmailLoading ? 'Redirecting to Google...' : 'Continue with Gmail'}
+            {gmailLoading ? 'Opening Google...' : 'Continue with Gmail'}
           </span>
         </button>
 
@@ -175,6 +155,7 @@ export default function Login() {
             required
             disabled={loading || gmailLoading}
             className="bg-game-bg border-game-border text-white"
+            autoComplete="email"
           />
           <div className="relative">
             <Input
@@ -185,6 +166,7 @@ export default function Login() {
               required
               disabled={loading || gmailLoading}
               className="bg-game-bg border-game-border text-white pr-10"
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
             />
             <button
               type="button"

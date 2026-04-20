@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -10,34 +10,39 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Check all required vars are present
-const missingVars = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID']
+const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
+
+const stub = {
+  currentUser: null,
+  onAuthStateChanged: (cb) => { setTimeout(() => cb(null), 0); return () => {}; },
+  signOut: () => Promise.resolve(),
+};
+
+let auth = stub;
+
+const missing = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID']
   .filter((k) => !import.meta.env[k]);
 
-let auth;
-
-if (missingVars.length > 0) {
-  console.error('[firebase] Missing env vars:', missingVars.join(', '));
-  // Stub — app will show login but auth won't work
-  auth = {
-    currentUser: null,
-    onAuthStateChanged: (cb) => { cb(null); return () => {}; },
-    signOut: () => Promise.resolve(),
-  };
-} else {
+if (missing.length === 0) {
   try {
-    // Prevent duplicate app initialization
-    const app = getApps().length === 0
-      ? initializeApp(firebaseConfig)
-      : getApps()[0];
-    auth = getAuth(app);
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
+    if (isCapacitor) {
+      // Use indexedDB persistence on Android for better reliability
+      auth = initializeAuth(app, {
+        persistence: indexedDBLocalPersistence,
+      });
+    } else {
+      auth = getAuth(app);
+    }
   } catch (err) {
-    console.error('[firebase] init failed:', err.message);
-    auth = {
-      currentUser: null,
-      onAuthStateChanged: (cb) => { cb(null); return () => {}; },
-      signOut: () => Promise.resolve(),
-    };
+    // If initializeAuth already called, fall back to getAuth
+    try {
+      const app = getApps()[0];
+      auth = getAuth(app);
+    } catch (e) {
+      console.error('[firebase] init failed:', e.message);
+    }
   }
 }
 

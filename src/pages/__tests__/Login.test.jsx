@@ -13,21 +13,22 @@ vi.mock('@/lib/AuthContext', () => ({
 
 // Mock firebase
 vi.mock('@/lib/firebase', () => ({
-  auth: {},
+  auth: {
+    onAuthStateChanged: vi.fn(),
+    currentUser: null,
+  },
 }));
 
 // Mock firebase/auth
 vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn().mockImplementation(() => ({ setCustomParameters: vi.fn() })),
-  signInWithRedirect: vi.fn().mockResolvedValue(undefined),
-  signInWithPopup: vi.fn().mockResolvedValue({ user: { uid: 'test' } }),
-  signInWithCredential: vi.fn().mockResolvedValue({ user: { uid: 'test' } }),
-  getRedirectResult: vi.fn().mockResolvedValue(null),
+  signInWithPopup: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
+  signInWithCredential: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
   signInWithEmailAndPassword: vi.fn(),
   createUserWithEmailAndPassword: vi.fn(),
-  sendSignInLinkToEmail: vi.fn(),
-  isSignInWithEmailLink: vi.fn().mockReturnValue(false),
-  signInWithEmailLink: vi.fn(),
+  initializeAuth: vi.fn(),
+  indexedDBLocalPersistence: {},
+  browserLocalPersistence: {},
 }));
 
 // Mock i18n
@@ -52,14 +53,14 @@ beforeEach(() => {
 // Validates: Requirements 1.2
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Property 2: Authenticated users are redirected away from Login', () => {
-  it('redirects any authenticated user away from /login to /', async () => {
-    await fc.assert(
-      fc.asyncProperty(
+  it('redirects any authenticated user away from /login to /', () => {
+    fc.assert(
+      fc.property(
         fc.record({
           uid: fc.string({ minLength: 1 }),
           role: fc.constantFrom('admin', 'user'),
         }),
-        async ({ uid, role }) => {
+        ({ uid, role }) => {
           useAuth.mockReturnValue({
             isAuthenticated: true,
             isLoadingAuth: false,
@@ -76,16 +77,13 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
             </MemoryRouter>
           );
 
-          // Wait for getRedirectResult to resolve then check redirect
-          await new Promise((r) => setTimeout(r, 50));
-
           expect(getByTestId('dashboard')).toBeTruthy();
           expect(queryByTestId('login-form')).toBeNull();
 
           unmount();
         }
       ),
-      { numRuns: 20 }
+      { numRuns: 50 }
     );
   });
 });
@@ -94,7 +92,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Login page unit tests', () => {
-  it('renders email input and sign-in button when unauthenticated', async () => {
+  it('renders email input and sign-in button when unauthenticated', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -102,7 +100,7 @@ describe('Login page unit tests', () => {
       role: null,
     });
 
-    const { getByPlaceholderText, getByText, findByText } = render(
+    const { getByPlaceholderText, getByText } = render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -111,8 +109,6 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
-    // Wait for getRedirectResult to resolve (async)
-    await findByText('Continue with Gmail');
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
     expect(getByText('Continue with Gmail')).toBeTruthy();
   });
