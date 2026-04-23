@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   signInWithCredential,
   signInWithEmailAndPassword,
@@ -118,9 +119,22 @@ export default function Login() {
         await signInWithCredential(auth, credential);
         navigate('/');
       } else {
-        // Web / Electron — use redirect (avoids popup blocker issues)
-        await signInWithRedirect(auth, provider);
-        // Page will reload; result is handled in useEffect above
+        // Web / Electron: popup first (better UX), fallback to redirect if blocked.
+        try {
+          await signInWithPopup(auth, provider);
+          navigate('/');
+        } catch (popupErr) {
+          if (
+            popupErr?.code === 'auth/popup-blocked' ||
+            popupErr?.code === 'auth/cancelled-popup-request' ||
+            popupErr?.code === 'auth/operation-not-supported-in-this-environment'
+          ) {
+            await signInWithRedirect(auth, provider);
+            // Page reloads; redirect result is handled in useEffect above.
+            return;
+          }
+          throw popupErr;
+        }
       }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {

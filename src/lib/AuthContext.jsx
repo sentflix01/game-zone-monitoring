@@ -14,41 +14,57 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    // If auth is a stub (Firebase failed to init), mark as not loading
-    if (!auth || typeof auth.onAuthStateChanged !== 'function') {
+    // If auth is missing, avoid blocking the UI behind a spinner.
+    if (!auth) {
       setIsLoadingAuth(false);
       return;
     }
 
     // Safety timeout — if onAuthStateChanged never fires (e.g. IndexedDB hang
-    // on Android WebView), stop the spinner after 8 seconds
+    // on Android WebView), stop the spinner after 8 seconds.
     const timeout = setTimeout(() => {
+      setAuthError('Auth initialization timeout');
       setIsLoadingAuth(false);
     }, 8000);
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      clearTimeout(timeout);
-      if (firebaseUser) {
-        let storedRole = localStorage.getItem(ROLE_KEY);
-        if (!storedRole) {
-          // Hardcoded admin UIDs — add your UID here
-          const ADMIN_UIDS = import.meta.env.VITE_ADMIN_UIDS
-            ? import.meta.env.VITE_ADMIN_UIDS.split(',').map(s => s.trim())
-            : [];
-          storedRole = ADMIN_UIDS.includes(firebaseUser.uid) ? 'admin' : 'user';
-          localStorage.setItem(ROLE_KEY, storedRole);
+    let unsubscribe = () => {};
+
+    try {
+      unsubscribe = onAuthStateChanged(
+        auth,
+        (firebaseUser) => {
+          clearTimeout(timeout);
+          setAuthError(null);
+          if (firebaseUser) {
+            let storedRole = localStorage.getItem(ROLE_KEY);
+            if (!storedRole) {
+              const ADMIN_UIDS = import.meta.env.VITE_ADMIN_UIDS
+                ? import.meta.env.VITE_ADMIN_UIDS.split(',').map((s) => s.trim())
+                : [];
+              storedRole = ADMIN_UIDS.includes(firebaseUser.uid) ? 'admin' : 'user';
+              localStorage.setItem(ROLE_KEY, storedRole);
+            }
+            setUser(firebaseUser);
+            setRoleState(storedRole);
+            setIsAuthenticated(true);
+          } else {
+            setUser(null);
+            setRoleState(null);
+            setIsAuthenticated(false);
+          }
+          setIsLoadingAuth(false);
+        },
+        (error) => {
+          clearTimeout(timeout);
+          setAuthError(error?.message || 'Auth state listener failed');
+          setIsLoadingAuth(false);
         }
-        setUser(firebaseUser);
-        setRoleState(storedRole);
-        setIsAuthenticated(true);
-        setIsLoadingAuth(false);
-      } else {
-        setUser(null);
-        setRoleState(null);
-        setIsAuthenticated(false);
-        setIsLoadingAuth(false);
-      }
-    });
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      setAuthError(error?.message || 'Auth initialization failed');
+      setIsLoadingAuth(false);
+    }
 
     return () => {
       clearTimeout(timeout);
@@ -57,11 +73,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = async () => {
-    await signOut(auth);
-    localStorage.removeItem(ROLE_KEY);
-    setUser(null);
-    setRoleState(null);
-    setIsAuthenticated(false);
+    try {
+      await signOut(auth);
+    } catch (error) {
+      setAuthError(error?.message || 'Failed to sign out');
+    } finally {
+      localStorage.removeItem(ROLE_KEY);
+      setUser(null);
+      setRoleState(null);
+      setIsAuthenticated(false);
+    }
   };
 
   const setRole = (uid, newRole) => {
