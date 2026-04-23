@@ -8,6 +8,7 @@ import {
   signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
@@ -138,10 +139,30 @@ export default function Login() {
       }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        const msg = getErrorMessage(err.code) || 'Gmail sign-in failed. Please use email/password.';
+        const msg =
+          getErrorMessage(err.code) ||
+          err?.message ||
+          'Gmail sign-in failed. Please use email/password.';
         toast.error(msg);
       }
+    } finally {
+      // If we triggered redirect, the page will reload; harmless if it doesn't.
       setGmailLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      toast.error('Enter your email first.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, trimmed);
+      toast.success('Password reset email sent. Check your inbox.');
+    } catch (err) {
+      const msg = getErrorMessage(err.code) || err?.message || 'Failed to send reset email.';
+      toast.error(msg);
     }
   }
 
@@ -214,6 +235,17 @@ export default function Login() {
             {loading ? 'Please wait...' : (isRegister ? 'Create Account' : 'Sign In')}
           </Button>
         </form>
+
+        {!isRegister && (
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            disabled={loading || gmailLoading}
+            className="w-full text-center text-game-muted text-xs hover:text-white transition-colors disabled:opacity-50"
+          >
+            Forgot password?
+          </button>
+        )}
 
         <button
           type="button"

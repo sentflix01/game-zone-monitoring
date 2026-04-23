@@ -6,6 +6,18 @@ const AuthContext = createContext();
 
 const ROLE_KEY = 'gamezone_user_role';
 
+function getStoredRoleForUser(uid) {
+  let storedRole = localStorage.getItem(ROLE_KEY);
+  if (!storedRole) {
+    const ADMIN_UIDS = import.meta.env.VITE_ADMIN_UIDS
+      ? import.meta.env.VITE_ADMIN_UIDS.split(',').map((s) => s.trim())
+      : [];
+    storedRole = ADMIN_UIDS.includes(uid) ? 'admin' : 'user';
+    localStorage.setItem(ROLE_KEY, storedRole);
+  }
+  return storedRole;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [role, setRoleState] = useState(null);
@@ -18,6 +30,16 @@ export const AuthProvider = ({ children }) => {
     if (!auth) {
       setIsLoadingAuth(false);
       return;
+    }
+
+    // Fast-path: if we already have a current user (common right after login),
+    // don't block the UI waiting for the listener.
+    if (auth.currentUser) {
+      const storedRole = getStoredRoleForUser(auth.currentUser.uid);
+      setUser(auth.currentUser);
+      setRoleState(storedRole);
+      setIsAuthenticated(true);
+      setIsLoadingAuth(false);
     }
 
     // Safety timeout — if onAuthStateChanged never fires (e.g. IndexedDB hang
@@ -36,14 +58,7 @@ export const AuthProvider = ({ children }) => {
           clearTimeout(timeout);
           setAuthError(null);
           if (firebaseUser) {
-            let storedRole = localStorage.getItem(ROLE_KEY);
-            if (!storedRole) {
-              const ADMIN_UIDS = import.meta.env.VITE_ADMIN_UIDS
-                ? import.meta.env.VITE_ADMIN_UIDS.split(',').map((s) => s.trim())
-                : [];
-              storedRole = ADMIN_UIDS.includes(firebaseUser.uid) ? 'admin' : 'user';
-              localStorage.setItem(ROLE_KEY, storedRole);
-            }
+            const storedRole = getStoredRoleForUser(firebaseUser.uid);
             setUser(firebaseUser);
             setRoleState(storedRole);
             setIsAuthenticated(true);

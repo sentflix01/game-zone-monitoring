@@ -8,17 +8,23 @@ import { useTranslation } from "@/i18n/I18nContext";
 import { useTour } from "@/contexts/TourContext";
 import RoleGuard from "@/components/RoleGuard";
 import { useAuth } from "@/lib/AuthContext";
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 
 export default function Settings() {
   const { t } = useTranslation();
   const { restartTour } = useTour();
-  const { setRole } = useAuth();
+  const { setRole, user } = useAuth();
   const [promoteUid, setPromoteUid] = useState("");
   const [pricing, setPricing] = useState([]);
   const [rates, setRates] = useState({ PS5: "", PS4: "" });
   const [gameTimes, setGameTimes] = useState({ PS5: "", PS4: "" });
   const [currency, setCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
 
   useEffect(() => {
     storageAdapter.entities.Pricing.list().then((p) => {
@@ -124,6 +130,83 @@ export default function Settings() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="bg-game-surface border border-game-border rounded-xl p-6 space-y-4">
+        <h3 className="text-white font-semibold">Change Password</h3>
+        <p className="text-game-muted text-xs">
+          This works for email/password accounts. If you signed in with Gmail, use Google account security to change your password.
+        </p>
+        <div className="space-y-3">
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+            className="bg-game-bg border-game-border text-white"
+            autoComplete="current-password"
+          />
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="New password"
+            className="bg-game-bg border-game-border text-white"
+            autoComplete="new-password"
+          />
+          <Input
+            type="password"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+            placeholder="Confirm new password"
+            className="bg-game-bg border-game-border text-white"
+            autoComplete="new-password"
+          />
+          <Button
+            disabled={pwLoading}
+            onClick={async () => {
+              if (!user) return;
+              if (!user.email) {
+                toast.error("This account doesn't have an email.");
+                return;
+              }
+              const providers = (user.providerData || []).map((p) => p.providerId);
+              if (!providers.includes("password")) {
+                toast.error("Password change is only available for email/password accounts.");
+                return;
+              }
+              if (!currentPassword || !newPassword) {
+                toast.error("Fill current and new password.");
+                return;
+              }
+              if (newPassword.length < 6) {
+                toast.error("New password must be at least 6 characters.");
+                return;
+              }
+              if (newPassword !== confirmNewPassword) {
+                toast.error("New passwords do not match.");
+                return;
+              }
+              setPwLoading(true);
+              try {
+                const cred = EmailAuthProvider.credential(user.email, currentPassword);
+                await reauthenticateWithCredential(user, cred);
+                await updatePassword(user, newPassword);
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmNewPassword("");
+                toast.success("Password updated.");
+              } catch (err) {
+                toast.error(err?.message || "Failed to update password.");
+              } finally {
+                setPwLoading(false);
+              }
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white"
+          >
+            {pwLoading ? "Updating..." : "Update Password"}
+          </Button>
+        </div>
       </div>
 
       <RoleGuard role="admin">
