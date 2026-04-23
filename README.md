@@ -43,10 +43,50 @@ Users log in via:
 
 Admin UIDs are set via `VITE_ADMIN_UIDS` in `.env`. The first user whose UID matches gets admin role automatically on first login.
 
+## Native Platform Setup
+
+### Required Native Asset Files
+
+These files contain sensitive credentials and **must not be committed** to the repository. They must be provided per-environment (CI secrets or local developer setup).
+
+| File | Platform | Purpose |
+|------|----------|---------|
+| `android/app/google-services.json` | Android | GoogleAuth / Firebase on Android |
+| `ios/App/App/GoogleService-Info.plist` | iOS | GoogleAuth / Firebase on iOS |
+
+**How to obtain them:**
+1. Go to the [Firebase Console](https://console.firebase.google.com/) → your project → Project Settings
+2. Under "Your apps", download `google-services.json` for Android and `GoogleService-Info.plist` for iOS
+3. Place each file at the path shown above
+
+> Without these files, `@codetrix-studio/capacitor-google-auth` will throw at runtime on the respective platform. The Android `build.gradle` conditionally skips the Google Services plugin when `google-services.json` is absent, so the build will succeed but auth will fail at launch.
+
+A pre-build warning script (`scripts/check-native-assets.mjs`) runs automatically before `npm run build:android` and warns if these files are missing.
+
+### Android SDK Requirements (Capacitor 8.x)
+
+Verified in `android/variables.gradle`:
+
+| Setting | Value | Requirement |
+|---------|-------|-------------|
+| `minSdkVersion` | 24 | >= 23 ✅ |
+| `targetSdkVersion` | 36 | >= 34 ✅ |
+| `compileSdkVersion` | 36 | >= 34 ✅ |
+
+### Required Android Permissions
+
+Declared in `android/app/src/main/AndroidManifest.xml`:
+- `INTERNET` — required for all network calls and Capacitor WebView
+- `ACCESS_NETWORK_STATE` — network connectivity checks
+- `VIBRATE` — haptic feedback
+
+GoogleAuth does not require additional Android permissions beyond `INTERNET`.
+
 ## Build
 
 ```bash
 npm run build          # web
+npm run build:android  # web build + cap sync android (warns if google-services.json absent)
 npx cap sync           # sync to Android/iOS
 npx cap open android   # open in Android Studio
 npx cap open ios       # open in Xcode

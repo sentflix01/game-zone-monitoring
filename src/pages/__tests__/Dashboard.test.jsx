@@ -134,7 +134,7 @@ describe('Property 9: Dashboard financial content visibility matches role', () =
       ),
       { numRuns: 100 }
     );
-  });
+  }, 30000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

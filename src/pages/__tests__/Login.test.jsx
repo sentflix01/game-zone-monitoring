@@ -23,6 +23,8 @@ vi.mock('@/lib/firebase', () => ({
 vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: vi.fn().mockImplementation(() => ({ setCustomParameters: vi.fn() })),
   signInWithPopup: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
+  signInWithRedirect: vi.fn().mockResolvedValue(undefined),
+  getRedirectResult: vi.fn().mockResolvedValue(null),
   signInWithCredential: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
   signInWithEmailAndPassword: vi.fn(),
   createUserWithEmailAndPassword: vi.fn(),

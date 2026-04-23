@@ -20,7 +20,14 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
+    // Safety timeout — if onAuthStateChanged never fires (e.g. IndexedDB hang
+    // on Android WebView), stop the spinner after 8 seconds
+    const timeout = setTimeout(() => {
+      setIsLoadingAuth(false);
+    }, 8000);
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      clearTimeout(timeout);
       if (firebaseUser) {
         let storedRole = localStorage.getItem(ROLE_KEY);
         if (!storedRole) {
@@ -43,7 +50,10 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   const logout = async () => {

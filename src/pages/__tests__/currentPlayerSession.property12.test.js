@@ -40,8 +40,10 @@ function deriveConsoleRows(consoleId, allSessions, activeSessions) {
 const consoleIdArb = fc.uuid();
 
 // Arbitrary for an ISO date string (within a reasonable range)
-const isoDateArb = fc.date({ min: new Date('2020-01-01'), max: new Date('2025-12-31') })
-  .map((d) => d.toISOString());
+// Use integer timestamps to avoid fc.date() generating invalid Date objects
+const isoDateArb = fc
+  .integer({ min: new Date('2020-01-01').getTime(), max: new Date('2025-12-31').getTime() })
+  .map((ts) => new Date(ts).toISOString());
 
 // Arbitrary for a completed session for a given console
 const completedSessionArb = (consoleId) =>
@@ -123,7 +125,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
 
   it('shows exactly 1 row (active only) when no completed sessions exist', () => {
     fc.assert(
-      fc.property(consoleIdArb, activeSessionArb(fc.sample(consoleIdArb, 1)[0]), (consoleId, _ignored) => {
+      fc.property(consoleIdArb, (consoleId) => {
         const activeSession = { id: 'a1', console_id: consoleId, player_name: 'P', status: 'active', start_time: new Date().toISOString(), games: [] };
         const rows = deriveConsoleRows(consoleId, [], [activeSession]);
         expect(rows.length).toBe(1);

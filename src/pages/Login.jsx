@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -57,6 +58,23 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
 
+  // Handle redirect result when returning from Google sign-in redirect
+  useEffect(() => {
+    if (isCapacitor) return; // native uses its own flow
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) navigate('/');
+      })
+      .catch((err) => {
+        // auth/no-auth-event is normal when there's no pending redirect — ignore it
+        if (err.code && err.code !== 'auth/no-auth-event' && err.code !== 'auth/popup-closed-by-user') {
+          const msg = getErrorMessage(err.code) || 'Gmail sign-in failed.';
+          toast.error(msg);
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (isLoadingAuth) {
     return (
       <div className="min-h-screen bg-game-bg flex items-center justify-center">
@@ -93,24 +111,22 @@ export default function Login() {
       provider.setCustomParameters({ prompt: 'select_account' });
 
       if (isCapacitor) {
-        // Android — use native Capacitor Google Auth plugin
-        // This shows a native Google account picker popup
+        // Android/iOS — use native Capacitor Google Auth plugin
         const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
         const googleUser = await GoogleAuth.signIn();
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
         await signInWithCredential(auth, credential);
         navigate('/');
       } else {
-        // Web / Electron — use popup (shows Google account picker in a popup window)
-        const result = await signInWithPopup(auth, provider);
-        if (result?.user) navigate('/');
+        // Web / Electron — use redirect (avoids popup blocker issues)
+        await signInWithRedirect(auth, provider);
+        // Page will reload; result is handled in useEffect above
       }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
         const msg = getErrorMessage(err.code) || 'Gmail sign-in failed. Please use email/password.';
         toast.error(msg);
       }
-    } finally {
       setGmailLoading(false);
     }
   }

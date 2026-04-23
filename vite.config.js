@@ -68,7 +68,6 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ['@capacitor/preferences'],
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],

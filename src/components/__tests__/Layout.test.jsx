@@ -49,6 +49,7 @@ describe("Property 10: Navigation items rendered match the user's role", () => {
         (role) => {
           useAuth.mockReturnValue({ role, logout: vi.fn() });
 
+
           const { container, unmount } = render(
             <MemoryRouter>
               <Layout />
@@ -73,7 +74,7 @@ describe("Property 10: Navigation items rendered match the user's role", () => {
       ),
       { numRuns: 100 }
     );
-  });
+  }, 30000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

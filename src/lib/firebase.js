@@ -28,10 +28,15 @@ if (missing.length === 0) {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
     if (isCapacitor) {
-      // Use indexedDB persistence on Android for better reliability
-      auth = initializeAuth(app, {
-        persistence: indexedDBLocalPersistence,
-      });
+      // On Android WebView, try indexedDB first, fall back to localStorage
+      // indexedDB can hang silently in some WebView versions
+      try {
+        auth = initializeAuth(app, {
+          persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+        });
+      } catch (e) {
+        auth = getAuth(app);
+      }
     } else {
       auth = getAuth(app);
     }
