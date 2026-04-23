@@ -21,6 +21,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build web assets (creates dist/)
+        run: npm run build
+
+      - name: Sync Capacitor Android assets (generates capacitor.plugins.json)
+        run: npx cap sync android
+
       - name: Lint
         run: npm run lint
 

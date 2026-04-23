@@ -26,6 +26,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm install --legacy-peer-deps
+      - name: Build web assets (creates dist/)
+        run: npm run build
+      - name: Sync Capacitor Android assets (generates capacitor.plugins.json)
+        run: npx cap sync android
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
