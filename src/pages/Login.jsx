@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -117,22 +116,7 @@ export default function Login() {
     });
   }, []);
 
-  // Handle redirect result when returning from Google sign-in redirect
-  useEffect(() => {
-    if (isCapacitor) return; // native uses its own flow
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) navigate('/');
-      })
-      .catch((err) => {
-        // auth/no-auth-event is normal when there's no pending redirect — ignore it
-        if (err.code && err.code !== 'auth/no-auth-event' && err.code !== 'auth/popup-closed-by-user') {
-          const msg = getErrorMessage(err.code) || 'Gmail sign-in failed.';
-          toast.error(msg);
-        }
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
 
   if (isLoadingAuth) {
     return (
@@ -192,10 +176,9 @@ export default function Login() {
         await signInWithCredential(auth, credential);
         // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
       } else {
-        // Web: Use redirect instead of popup to avoid hanging/blocked popups
-        await signInWithRedirect(auth, provider);
-        // Page reloads; keep loading state active until navigation completes
-        await new Promise(() => {});
+        // Web: use popup for immediate feedback
+        await signInWithPopup(auth, provider);
+        // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
       }
     } catch (err) {
       if (!isGoogleSignInCancelled(err)) {
