@@ -51,7 +51,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { useAuth } from '@/lib/AuthContext';
-import { signInWithRedirect } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import Login from '../Login';
 
 beforeEach(() => {
@@ -123,7 +123,7 @@ describe('Login page unit tests', () => {
     expect(getByText('Continue with Gmail')).toBeTruthy();
   });
 
-  it('starts Google redirect sign-in when the Gmail button is clicked', async () => {
+  it('starts Google popup sign-in when the Gmail button is clicked', async () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -143,7 +143,7 @@ describe('Login page unit tests', () => {
     fireEvent.click(getByRole('button', { name: /continue with gmail/i }));
 
     await waitFor(() => {
-      expect(signInWithRedirect).toHaveBeenCalledTimes(1);
+      expect(signInWithPopup).toHaveBeenCalledTimes(1);
     });
   });
 
