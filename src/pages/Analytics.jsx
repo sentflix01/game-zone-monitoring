@@ -17,8 +17,33 @@ export default function Analytics() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
 
   useEffect(() => {
-    Promise.all([storageAdapter.entities.Session.list("-created_date", 2000), storageAdapter.entities.Expense.list("-date")])
-      .then(([s, e]) => { setSessions(s); setExpenses(e); setLoading(false); });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [s, e] = await Promise.all([
+          storageAdapter.entities.Session.list("-created_date", 2000),
+          storageAdapter.entities.Expense.list("-date"),
+        ]);
+
+        if (cancelled) return;
+
+        setSessions(s);
+        setExpenses(e);
+      } catch (error) {
+        console.error("Analytics failed to load:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => {

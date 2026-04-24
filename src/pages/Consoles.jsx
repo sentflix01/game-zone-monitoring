@@ -48,16 +48,23 @@ export default function Consoles() {
   const [startForm, setStartForm] = useState({ playerName: "", phone: "" });
 
   const load = async () => {
-    const [c, p] = await Promise.all([
-      storageAdapter.entities.Console.list(),
-      storageAdapter.entities.Pricing.list(),
-    ]);
-    setConsoles(c);
-    setPricing(p);
-    setLoading(false);
+    try {
+      const [c, p] = await Promise.all([
+        storageAdapter.entities.Console.list(),
+        storageAdapter.entities.Pricing.list(),
+      ]);
+      setConsoles(c);
+      setPricing(p);
+    } catch (error) {
+      console.error("Consoles failed to load:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   useEffect(() => {
     tickRef.current = setInterval(() => {

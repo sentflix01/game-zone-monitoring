@@ -43,11 +43,11 @@ export const AuthProvider = ({ children }) => {
     }
 
     // Safety timeout — if onAuthStateChanged never fires (e.g. IndexedDB hang
-    // on Android WebView), stop the spinner after 8 seconds.
+    // on Android WebView), stop the spinner after 5 seconds.
     const timeout = setTimeout(() => {
       setAuthError('Auth initialization timeout');
       setIsLoadingAuth(false);
-    }, 8000);
+    }, 5000);
 
     let unsubscribe = () => {};
 

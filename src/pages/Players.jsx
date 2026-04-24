@@ -11,14 +11,33 @@ export default function Players() {
   const [sessions, setSessions] = useState([]);
 
   useEffect(() => {
-    Promise.all([
-      storageAdapter.entities.Player.list("-total_spend"),
-      storageAdapter.entities.Session.list("-created_date", 500),
-    ]).then(([p, s]) => {
-      setPlayers(p);
-      setSessions(s);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [p, s] = await Promise.all([
+          storageAdapter.entities.Player.list("-total_spend"),
+          storageAdapter.entities.Session.list("-created_date", 500),
+        ]);
+
+        if (cancelled) return;
+
+        setPlayers(p);
+        setSessions(s);
+      } catch (error) {
+        console.error("Players failed to load:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const playerSessions = selected

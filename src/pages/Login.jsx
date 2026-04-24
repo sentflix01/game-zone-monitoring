@@ -18,6 +18,56 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
+const GOOGLE_AUTH_SCOPES = ['profile', 'email'];
+let nativeGoogleAuthInitPromise = null;
+
+async function getNativeGoogleAuth() {
+  const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+
+  if (!nativeGoogleAuthInitPromise) {
+    nativeGoogleAuthInitPromise = Promise.resolve(
+      GoogleAuth.initialize({
+        scopes: GOOGLE_AUTH_SCOPES,
+        grantOfflineAccess: true,
+      })
+    ).catch((error) => {
+      nativeGoogleAuthInitPromise = null;
+      throw error;
+    });
+  }
+
+  await nativeGoogleAuthInitPromise;
+  return GoogleAuth;
+}
+
+function isGoogleSignInCancelled(error) {
+  const details = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+  return (
+    error?.code === 'auth/popup-closed-by-user' ||
+    error?.code === '12501' ||
+    details.includes('popup-closed-by-user') ||
+    details.includes('canceled the sign-in flow')
+  );
+}
+
+function getNativeGoogleErrorMessage(error) {
+  const details = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+
+  if (
+    details.includes('plugin') ||
+    details.includes('not implemented') ||
+    details.includes('googleauth') ||
+    details.includes('google auth')
+  ) {
+    return 'Google sign-in is unavailable in this Android build. Sync and rebuild the native app, or use email/password for now.';
+  }
+
+  if (details.includes('id token')) {
+    return 'Google sign-in did not return an ID token. Check the native Google auth setup.';
+  }
+
+  return null;
+}
 
 function getErrorMessage(code) {
   switch (code) {
@@ -60,6 +110,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
 
+  useEffect(() => {
+    if (!isCapacitor) return;
+
+    void getNativeGoogleAuth().catch((error) => {
+      console.error('Native GoogleAuth initialization failed:', error);
+    });
+  }, []);
+
   // Handle redirect result when returning from Google sign-in redirect
   useEffect(() => {
     if (isCapacitor) return; // native uses its own flow
@@ -97,16 +155,25 @@ export default function Login() {
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
-      navigate('/');
+      // Don't navigate() here — let onAuthStateChanged fire in AuthContext.
+      // The `if (isAuthenticated) return <Navigate to="/" replace />` below
+      // will redirect once the auth state propagates, avoiding the race where
+      // ProtectedRoute sees isAuthenticated=false and bounces back to /login.
     } catch (err) {
       const msg = getErrorMessage(err.code) || 'Sign in failed. Please try again.';
       toast.error(msg);
-    } finally {
       setLoading(false);
     }
+    // Keep loading=true until AuthContext confirms the user — the redirect
+    // will happen automatically, and loading state clears if there is an error.
   }
 
   async function handleGmailLogin() {
+    if (!auth) {
+      toast.error('Authentication is not configured in this build.');
+      return;
+    }
+
     setGmailLoading(true);
     try {
       const provider = new GoogleAuthProvider();
@@ -114,16 +181,22 @@ export default function Login() {
 
       if (isCapacitor) {
         // Android/iOS — use native Capacitor Google Auth plugin
-        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+        const GoogleAuth = await getNativeGoogleAuth();
         const googleUser = await GoogleAuth.signIn();
-        const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+        const idToken = googleUser?.authentication?.idToken || googleUser?.idToken;
+
+        if (!idToken) {
+          throw new Error('Google sign-in completed without an ID token.');
+        }
+
+        const credential = GoogleAuthProvider.credential(idToken);
         await signInWithCredential(auth, credential);
-        navigate('/');
+        // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
       } else {
         // Web / Electron: popup first (better UX), fallback to redirect if blocked.
         try {
           await signInWithPopup(auth, provider);
-          navigate('/');
+          // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
         } catch (popupErr) {
           if (
             popupErr?.code === 'auth/popup-blocked' ||
@@ -138,8 +211,9 @@ export default function Login() {
         }
       }
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
+      if (!isGoogleSignInCancelled(err)) {
         const msg =
+          (isCapacitor ? getNativeGoogleErrorMessage(err) : null) ||
           getErrorMessage(err.code) ||
           err?.message ||
           'Gmail sign-in failed. Please use email/password.';

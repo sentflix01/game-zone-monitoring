@@ -15,10 +15,27 @@ export default function Report() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    storageAdapter.entities.Session.list("-created_date", 1000).then((s) => {
-      setSessions(s);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const s = await storageAdapter.entities.Session.list("-created_date", 1000);
+        if (cancelled) return;
+        setSessions(s);
+      } catch (error) {
+        console.error("Report failed to load:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const today = new Date().toDateString();

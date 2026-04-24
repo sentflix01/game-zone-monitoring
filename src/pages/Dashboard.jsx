@@ -9,21 +9,33 @@ import { subDays } from "date-fns";
 
 const chartStyle = { backgroundColor: "hsl(222 47% 8%)", border: "1px solid hsl(222 30% 14%)", borderRadius: "8px", color: "#fff" };
 
+function safeMatchMedia(query) {
+  try {
+    return typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia(query).matches
+      : false;
+  } catch {
+    return false;
+  }
+}
+
 export default function Dashboard() {
   const { t } = useTranslation();
   const [consoles, setConsoles] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [deferredPrompt, setDeferredPrompt] = useState(() => window.__installPrompt || null);
-  const [isInstalled, setIsInstalled] = useState(window.matchMedia("(display-mode: standalone)").matches);
+  const [deferredPrompt, setDeferredPrompt] = useState(() => {
+    try { return window.__installPrompt || null; } catch { return null; }
+  });
+  const [isInstalled, setIsInstalled] = useState(() => safeMatchMedia("(display-mode: standalone)"));
   const [installDone, setInstallDone] = useState(false);
 
   useEffect(() => {
     const handler = (e) => { e.preventDefault(); window.__installPrompt = e; setDeferredPrompt(e); };
     window.addEventListener("beforeinstallprompt", handler);
     window.addEventListener("appinstalled", () => setIsInstalled(true));
-    if (window.__installPrompt) setDeferredPrompt(window.__installPrompt);
+    try { if (window.__installPrompt) setDeferredPrompt(window.__installPrompt); } catch { /* ignore */ }
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
@@ -38,11 +50,35 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    Promise.all([
-      storageAdapter.entities.Console.list(),
-      storageAdapter.entities.Session.list("-created_date", 500),
-      storageAdapter.entities.Expense.list("-date"),
-    ]).then(([c, s, e]) => { setConsoles(c); setSessions(s); setExpenses(e); setLoading(false); });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [c, s, e] = await Promise.all([
+          storageAdapter.entities.Console.list(),
+          storageAdapter.entities.Session.list("-created_date", 500),
+          storageAdapter.entities.Expense.list("-date"),
+        ]);
+
+        if (cancelled) return;
+
+        setConsoles(c);
+        setSessions(s);
+        setExpenses(e);
+      } catch (error) {
+        console.error("Dashboard failed to load:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const today = new Date().toDateString();

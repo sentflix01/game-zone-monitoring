@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, initializeAuth, browserLocalPersistence } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -28,11 +28,11 @@ if (missing.length === 0) {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
     if (isCapacitor) {
-      // On Android WebView, try indexedDB first, fall back to localStorage
-      // indexedDB can hang silently in some WebView versions
+      // Avoid IndexedDB on Android WebView because auth initialization can
+      // stall there and leave the app behind a loading spinner.
       try {
         auth = initializeAuth(app, {
-          persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+          persistence: browserLocalPersistence,
         });
       } catch (e) {
         auth = getAuth(app);

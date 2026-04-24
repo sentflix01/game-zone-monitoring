@@ -27,15 +27,33 @@ export default function Settings() {
   const [pwLoading, setPwLoading] = useState(false);
 
   useEffect(() => {
-    storageAdapter.entities.Pricing.list().then((p) => {
-      setPricing(p);
-      const ps5 = p.find((x) => x.console_type === "PS5");
-      const ps4 = p.find((x) => x.console_type === "PS4");
-      setRates({ PS5: ps5?.hourly_rate || "", PS4: ps4?.hourly_rate || "" });
-      setGameTimes({ PS5: ps5?.game_time_minutes || "", PS4: ps4?.game_time_minutes || "" });
-      if (ps5?.currency) setCurrency(ps5.currency);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const p = await storageAdapter.entities.Pricing.list();
+        if (cancelled) return;
+
+        setPricing(p);
+        const ps5 = p.find((x) => x.console_type === "PS5");
+        const ps4 = p.find((x) => x.console_type === "PS4");
+        setRates({ PS5: ps5?.hourly_rate || "", PS4: ps4?.hourly_rate || "" });
+        setGameTimes({ PS5: ps5?.game_time_minutes || "", PS4: ps4?.game_time_minutes || "" });
+        if (ps5?.currency) setCurrency(ps5.currency);
+      } catch (error) {
+        console.error("Settings failed to load:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const save = async () => {

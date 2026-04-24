@@ -20,8 +20,20 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ description: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10) });
 
-  const load = () => storageAdapter.entities.Expense.list("-date").then((e) => { setExpenses(e); setLoading(false); });
-  useEffect(() => { load(); }, []);
+  const load = async () => {
+    try {
+      const e = await storageAdapter.entities.Expense.list("-date");
+      setExpenses(e);
+    } catch (error) {
+      console.error("Expenses failed to load:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
 
   const add = async () => {
     if (!form.amount || isNaN(parseFloat(form.amount))) return toast.error(t('expenses.toast.invalidAmount'));

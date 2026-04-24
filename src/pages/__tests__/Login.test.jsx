@@ -1,7 +1,7 @@
 // Feature: auth-and-roles, Property 2: Authenticated users are redirected away from Login
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import React from 'react';
 import * as fc from 'fast-check';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -21,7 +21,14 @@ vi.mock('@/lib/firebase', () => ({
 
 // Mock firebase/auth
 vi.mock('firebase/auth', () => ({
-  GoogleAuthProvider: vi.fn().mockImplementation(() => ({ setCustomParameters: vi.fn() })),
+  GoogleAuthProvider: Object.assign(
+    vi.fn(function MockGoogleAuthProvider() {
+      this.setCustomParameters = vi.fn();
+    }),
+    {
+      credential: vi.fn().mockReturnValue({ providerId: 'google.com' }),
+    }
+  ),
   signInWithPopup: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
   signInWithRedirect: vi.fn().mockResolvedValue(undefined),
   getRedirectResult: vi.fn().mockResolvedValue(null),
@@ -44,6 +51,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { useAuth } from '@/lib/AuthContext';
+import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import Login from '../Login';
 
 beforeEach(() => {
@@ -113,6 +121,56 @@ describe('Login page unit tests', () => {
 
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
     expect(getByText('Continue with Gmail')).toBeTruthy();
+  });
+
+  it('starts Google popup sign-in when the Gmail button is clicked', async () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoadingAuth: false,
+      user: null,
+      role: null,
+    });
+
+    const { getByRole } = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(getByRole('button', { name: /continue with gmail/i }));
+
+    await waitFor(() => {
+      expect(signInWithPopup).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('falls back to redirect when the popup is blocked', async () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoadingAuth: false,
+      user: null,
+      role: null,
+    });
+
+    signInWithPopup.mockRejectedValueOnce({ code: 'auth/popup-blocked' });
+
+    const { getByRole } = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(getByRole('button', { name: /continue with gmail/i }));
+
+    await waitFor(() => {
+      expect(signInWithRedirect).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('shows loading spinner when auth is loading', async () => {

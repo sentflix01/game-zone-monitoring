@@ -5,41 +5,119 @@
  * - On web/Electron: delegates directly to localClient (localStorage).
  */
 
+import { Preferences } from '@capacitor/preferences';
 import { localClient } from './localClient';
 
 const DB_KEY = 'gamezone_db';
+const COLLECTIONS = ['Console', 'Session', 'Pricing', 'Player', 'Expense'];
 
 function isNative() {
   return typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
 }
 
-// ---------------------------------------------------------------------------
-// Capacitor Preferences helpers
-// ---------------------------------------------------------------------------
-
-async function getPreferences() {
-  // Dynamically resolve Capacitor Preferences only at runtime on native platforms.
-  // Using a string-concatenated import path prevents Rollup from trying to bundle it.
-  const mod = await import(/* @vite-ignore */ '@capacitor/preferences');
-  return mod.Preferences;
+function createEmptyDb() {
+  return {
+    Console: [],
+    Session: [],
+    Pricing: [],
+    Player: [],
+    Expense: [],
+  };
 }
 
-async function getDb() {
+function normalizeDb(db) {
+  const normalized = createEmptyDb();
+
+  if (!db || typeof db !== 'object') {
+    return normalized;
+  }
+
+  for (const collection of COLLECTIONS) {
+    if (Array.isArray(db[collection])) {
+      normalized[collection] = db[collection];
+    }
+  }
+
+  return normalized;
+}
+
+function readLocalFallbackDb() {
   try {
-    const Preferences = await getPreferences();
-    const { value } = await Preferences.get({ key: DB_KEY });
-    return value ? JSON.parse(value) : { Console: [], Session: [], Pricing: [] };
-  } catch (err) {
-    return Promise.reject(new Error(`storageAdapter: failed to read database — ${err.message}`));
+    const raw = localStorage.getItem(DB_KEY);
+    return raw ? normalizeDb(JSON.parse(raw)) : null;
+  } catch {
+    return null;
   }
 }
 
-async function saveDb(db) {
+function saveLocalFallbackDb(db) {
   try {
-    const Preferences = await getPreferences();
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function saveNativeDb(db) {
+  try {
     await Preferences.set({ key: DB_KEY, value: JSON.stringify(db) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wraps a promise with a timeout. If the promise doesn’t resolve within
+ * `ms` milliseconds, rejects with a timeout error.
+ */
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error(`storageAdapter: ${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(id); resolve(val); },
+      (err) => { clearTimeout(id); reject(err); }
+    );
+  });
+}
+
+async function getDb() {
+  const fallbackDb = readLocalFallbackDb();
+
+  try {
+    const { value } = await withTimeout(
+      Preferences.get({ key: DB_KEY }),
+      5000,
+      'Preferences.get'
+    );
+    if (value) {
+      const nativeDb = normalizeDb(JSON.parse(value));
+      saveLocalFallbackDb(nativeDb);
+      return nativeDb;
+    }
   } catch (err) {
-    return Promise.reject(new Error(`storageAdapter: failed to write database — ${err.message}`));
+    if (fallbackDb) {
+      return fallbackDb;
+    }
+    console.error(`storageAdapter: failed to read native database — ${err.message}`);
+  }
+
+  if (fallbackDb) {
+    await saveNativeDb(fallbackDb);
+    return fallbackDb;
+  }
+
+  return createEmptyDb();
+}
+
+async function saveDb(db) {
+  const normalizedDb = normalizeDb(db);
+  const savedLocally = saveLocalFallbackDb(normalizedDb);
+  const savedNatively = await saveNativeDb(normalizedDb);
+
+  if (!savedLocally && !savedNatively) {
+    return Promise.reject(new Error('storageAdapter: failed to persist database'));
   }
 }
 

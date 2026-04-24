@@ -10,10 +10,27 @@ export default function Sessions() {
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    storageAdapter.entities.Session.list("-created_date", 200).then((s) => {
-      setSessions(s);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const s = await storageAdapter.entities.Session.list("-created_date", 200);
+        if (cancelled) return;
+        setSessions(s);
+      } catch (error) {
+        console.error("Sessions failed to load:", error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const today = new Date().toDateString();
