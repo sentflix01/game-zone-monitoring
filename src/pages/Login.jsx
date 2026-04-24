@@ -193,22 +193,10 @@ export default function Login() {
         await signInWithCredential(auth, credential);
         // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
       } else {
-        // Web / Electron: popup first (better UX), fallback to redirect if blocked.
-        try {
-          await signInWithPopup(auth, provider);
-          // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
-        } catch (popupErr) {
-          if (
-            popupErr?.code === 'auth/popup-blocked' ||
-            popupErr?.code === 'auth/cancelled-popup-request' ||
-            popupErr?.code === 'auth/operation-not-supported-in-this-environment'
-          ) {
-            await signInWithRedirect(auth, provider);
-            // Page reloads; redirect result is handled in useEffect above.
-            return;
-          }
-          throw popupErr;
-        }
+        // Web: Use redirect instead of popup to avoid hanging/blocked popups
+        await signInWithRedirect(auth, provider);
+        // Page reloads; keep loading state active until navigation completes
+        await new Promise(() => {});
       }
     } catch (err) {
       if (!isGoogleSignInCancelled(err)) {
@@ -332,3 +320,4 @@ export default function Login() {
     </div>
   );
 }
+
