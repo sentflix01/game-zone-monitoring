@@ -3,7 +3,6 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
   signInWithRedirect,
-  signInWithPopup,
   getRedirectResult,
   signInWithCredential,
   signInWithEmailAndPassword,
