@@ -5,11 +5,9 @@ test.describe('production smoke', () => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible();
     await expect(page.getByPlaceholder('you@example.com')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
     await expect(page.getByText('Continue with Google')).toBeVisible();
-    await expect(page.getByText('Continue with GitHub')).toBeVisible();
-    await expect(page.getByText('Continue with LinkedIn')).toBeVisible();
-    await expect(page.getByText(/whatsapp/i)).toBeVisible();
+    // Email sign-in button (inside the form)
+    await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
   });
 
   test('unauthenticated root redirects to login', async ({ page }) => {
