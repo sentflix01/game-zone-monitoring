@@ -208,7 +208,6 @@ export const firestoreClient = {
    * userIndex/{monitorUid}.
    */
   async createMonitorDirect(ownerId, monitorUid, { email, displayName, isExistingOwner }) {
-    const batch = [];
     // owners/{ownerId}/users/{monitorUid}
     await setDoc(doc(db, 'owners', ownerId, 'users', monitorUid), {
       email,
