@@ -9,15 +9,14 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { auth } from '@/lib/firebase';
-import { functions } from '@/lib/firebase';
-import { Eye, EyeOff } from 'lucide-react';
+import { auth, functions } from '@/lib/firebase';
+import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 /* ─── Google Icon ─────────────────────────────────────────────────────────── */
 const GoogleIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18">
+  <svg viewBox="0 0 24 24" width="18" height="18" className="shrink-0">
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -25,23 +24,36 @@ const GoogleIcon = () => (
   </svg>
 );
 
-/* ─── Error messages ─────────────────────────────────────────────────────── */
+/* ─── Human-readable error messages ─────────────────────────────────────────── */
 function errMsg(code) {
   const map = {
-    'auth/invalid-email':                          'Invalid email address.',
-    'auth/user-not-found':                         'No account found with this email.',
-    'auth/wrong-password':                         'Incorrect email or password.',
-    'auth/invalid-credential':                     'Incorrect email or password.',
-    'auth/email-already-in-use':                   'An account with this email already exists.',
-    'auth/weak-password':                          'Password must be at least 6 characters.',
-    'auth/too-many-requests':                      'Too many attempts. Try again later.',
-    'auth/operation-not-allowed':                  'This sign-in method is not enabled. Contact the administrator.',
-    'auth/unauthorized-domain':                    'This domain is not authorized for sign-in.',
-    'auth/account-exists-with-different-credential': 'An account already exists with a different sign-in method.',
-    'auth/popup-closed-by-user':                   null,
-    'auth/popup-blocked':                          null,
+    'auth/invalid-email':                            'Invalid email address. Please check and try again.',
+    'auth/user-not-found':                           'No account found with this email.',
+    'auth/wrong-password':                           'Incorrect password. Please try again.',
+    'auth/invalid-credential':                       'Incorrect email or password. Please try again.',
+    'auth/email-already-in-use':                     'An account with this email already exists. Try signing in instead.',
+    'auth/weak-password':                            'Password must be at least 6 characters.',
+    'auth/too-many-requests':                        'Too many failed attempts. Please wait a few minutes and try again.',
+    'auth/operation-not-allowed':                    'This sign-in method is not enabled. Contact the administrator.',
+    'auth/unauthorized-domain':                      'This domain is not authorized for sign-in. Contact the administrator.',
+    'auth/network-request-failed':                   'Network error. Check your internet connection and try again.',
+    'auth/account-exists-with-different-credential': 'An account already exists with a different sign-in method for this email.',
+    'auth/popup-closed-by-user':                     null, // user dismissed — no error needed
+    'auth/popup-blocked':                            null, // handled by redirect fallback
+    'auth/cancelled-popup-request':                  null,
   };
   return map[code] ?? null;
+}
+
+/* ─── Inline error banner ────────────────────────────────────────────────── */
+function ErrorBanner({ message }) {
+  if (!message) return null;
+  return (
+    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm">
+      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+      <span>{message}</span>
+    </div>
+  );
 }
 
 /* ─── Popup → redirect fallback ──────────────────────────────────────────── */
@@ -64,12 +76,13 @@ async function googleSignIn() {
 export default function Login() {
   const { isAuthenticated, isLoadingAuth } = useAuth();
 
-  const [email, setEmail]         = useState('');
-  const [password, setPassword]   = useState('');
-  const [showPwd, setShowPwd]     = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
-  const [loadingBtn, setLoadingBtn] = useState(null);
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
+  const [showPwd, setShowPwd]         = useState(false);
+  const [isRegister, setIsRegister]   = useState(false);
+  const [loadingBtn, setLoadingBtn]   = useState(null); // 'google' | 'email' | null
   const [redirecting, setRedirecting] = useState(false);
+  const [error, setError]             = useState('');   // inline error message
 
   // Handle redirect result on mount (popup-blocked fallback)
   useEffect(() => {
@@ -77,16 +90,27 @@ export default function Login() {
     const pending = sessionStorage.getItem('__redirectPending') === '1';
     if (pending) setRedirecting(true);
     getRedirectResult(auth)
-      .then(r => { if (r?.user) toast.success('Signed in!'); })
-      .catch(e => { if (e.code !== 'auth/no-auth-event') toast.error(errMsg(e.code) || e.message); })
-      .finally(() => { sessionStorage.removeItem('__redirectPending'); setRedirecting(false); });
+      .then(r => { if (r?.user) toast.success('Signed in successfully!'); })
+      .catch(e => {
+        if (e.code !== 'auth/no-auth-event') {
+          const msg = errMsg(e.code) || e.message;
+          if (msg) setError(msg);
+        }
+      })
+      .finally(() => {
+        sessionStorage.removeItem('__redirectPending');
+        setRedirecting(false);
+      });
   }, []);
 
   const busy = !!loadingBtn || redirecting;
 
   if (isLoadingAuth || redirecting) return (
     <div className="min-h-screen bg-game-bg flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+        <p className="text-game-muted text-sm">Signing in…</p>
+      </div>
     </div>
   );
 
@@ -94,69 +118,82 @@ export default function Login() {
 
   /* ── Google ── */
   async function handleGoogle() {
+    setError('');
     setLoadingBtn('google');
     try {
       await googleSignIn();
+      // On success AuthContext navigates — no action needed
     } catch (e) {
-      const m = errMsg(e.code) || e.message;
-      if (m) toast.error(m);
+      const msg = errMsg(e.code) || e.message || 'Google sign-in failed. Please try again.';
+      if (msg) setError(msg);
     } finally {
       setLoadingBtn(null);
     }
   }
 
-  /* ── Email / Password ── */
+  /* ── Email sign-in (owner path + monitor fallback) ── */
   async function handleEmail(e) {
     e.preventDefault();
     if (!email.trim() || !password) return;
+    setError('');
     setLoadingBtn('email');
     try {
-      // Path 1: Try owner sign-in via Firebase Auth
       await signInWithEmailAndPassword(auth, email.trim(), password);
     } catch (err) {
-      const isPasswordError = [
+      const isCredentialError = [
         'auth/wrong-password',
         'auth/invalid-credential',
         'auth/user-not-found',
       ].includes(err.code);
 
-      if (isPasswordError) {
-        // Path 2: Try monitor sign-in via Cloud Function
+      if (isCredentialError) {
+        // Fallback: try monitor sign-in via Cloud Function
         try {
           const monitorSignIn = httpsCallable(functions, 'monitorSignIn');
           const result = await monitorSignIn({ email: email.trim(), password });
           await signInWithCustomToken(auth, result.data.token);
-          // AuthContext will resolve role from custom token claims — no action needed here
+          // AuthContext resolves role from custom token claims
         } catch {
-          toast.error('Invalid email or password.');
+          // Both paths failed — show a clear error
+          setError('Incorrect email or password. Please try again.');
           setLoadingBtn(null);
         }
       } else {
-        toast.error(errMsg(err.code) || 'Sign in failed.');
+        const msg = errMsg(err.code) || 'Sign in failed. Please try again.';
+        setError(msg);
         setLoadingBtn(null);
       }
     }
   }
 
+  /* ── Registration ── */
   async function handleRegister(e) {
     e.preventDefault();
     if (!email.trim() || !password) return;
+    setError('');
     setLoadingBtn('email');
     try {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
     } catch (err) {
-      toast.error(errMsg(err.code) || 'Registration failed.');
+      const msg = errMsg(err.code) || 'Registration failed. Please try again.';
+      setError(msg);
       setLoadingBtn(null);
     }
   }
 
+  /* ── Forgot password ── */
   async function handleForgot() {
-    if (!email.trim()) { toast.error('Enter your email first.'); return; }
+    if (!email.trim()) {
+      setError('Enter your email address first, then click Forgot password.');
+      return;
+    }
+    setError('');
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      toast.success('Password reset email sent!');
+      toast.success('Password reset email sent! Check your inbox.');
     } catch (e) {
-      toast.error(errMsg(e.code) || 'Failed to send reset email.');
+      const msg = errMsg(e.code) || 'Failed to send reset email.';
+      setError(msg);
     }
   }
 
@@ -174,15 +211,23 @@ export default function Login() {
 
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-5 space-y-4 shadow-xl">
 
-        {/* Google */}
+        {/* Inline error banner */}
+        <ErrorBanner message={error} />
+
+        {/* Google button */}
         <button
           type="button"
           onClick={handleGoogle}
           disabled={busy}
-          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-white/10 border border-white/10 transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-white/10 border border-white/10 transition-all hover:bg-white/15 hover:border-white/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <GoogleIcon />
-          <span className="text-xs">{loadingBtn === 'google' ? 'Connecting…' : 'Continue with Google'}</span>
+          {loadingBtn === 'google'
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <GoogleIcon />
+          }
+          <span className="text-xs">
+            {loadingBtn === 'google' ? 'Opening Google sign-in…' : 'Continue with Google'}
+          </span>
         </button>
 
         {/* Divider */}
@@ -197,7 +242,7 @@ export default function Login() {
           <Input
             type="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => { setEmail(e.target.value); setError(''); }}
             placeholder="you@example.com"
             required
             disabled={busy}
@@ -208,7 +253,7 @@ export default function Login() {
             <Input
               type={showPwd ? 'text' : 'password'}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
               placeholder="Password"
               required
               disabled={busy}
@@ -219,6 +264,7 @@ export default function Login() {
               type="button"
               onClick={() => setShowPwd(!showPwd)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
+              tabIndex={-1}
             >
               {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -228,7 +274,10 @@ export default function Login() {
             disabled={busy}
             className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm"
           >
-            {loadingBtn === 'email' ? 'Please wait…' : isRegister ? 'Create Account' : 'Sign In'}
+            {loadingBtn === 'email'
+              ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Please wait…</>
+              : isRegister ? 'Create Account' : 'Sign In'
+            }
           </Button>
         </form>
 
@@ -246,7 +295,7 @@ export default function Login() {
           )}
           <button
             type="button"
-            onClick={() => setIsRegister(!isRegister)}
+            onClick={() => { setIsRegister(!isRegister); setError(''); }}
             className="hover:text-white transition-colors ml-auto"
           >
             {isRegister ? 'Sign in instead' : 'Create account'}

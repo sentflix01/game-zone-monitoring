@@ -118,7 +118,6 @@ describe('Login page unit tests', () => {
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
     expect(getByText('Continue with Google')).toBeTruthy();
   });
-
   it('shows loading spinner when auth is loading', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
