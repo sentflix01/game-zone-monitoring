@@ -79,8 +79,15 @@ describe('Property 3: Logout produces clean unauthenticated state', () => {
           let capturedCtx = null;
           const { unmount } = renderWithAuth((ctx) => { capturedCtx = ctx; });
 
+          // Provide a mock Firebase user with getIdTokenResult (no monitor claims)
+          const mockUser = {
+            uid,
+            email: `${uid}@test.com`,
+            getIdTokenResult: vi.fn().mockResolvedValue({ claims: {} }),
+          };
+
           await act(async () => {
-            authStateCallback?.({ uid, email: `${uid}@test.com` });
+            authStateCallback?.(mockUser);
           });
 
           // Wait for resolveUser to finish
@@ -111,8 +118,14 @@ describe('Property 4: Auth resolution maps owners and monitors correctly', () =>
     let capturedCtx = null;
     const { unmount } = renderWithAuth((ctx) => { capturedCtx = ctx; });
 
+    const mockUser = {
+      uid: 'owner-uid',
+      email: 'owner@test.com',
+      getIdTokenResult: vi.fn().mockResolvedValue({ claims: {} }),
+    };
+
     await act(async () => {
-      authStateCallback?.({ uid: 'owner-uid', email: 'owner@test.com' });
+      authStateCallback?.(mockUser);
     });
 
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -128,8 +141,14 @@ describe('Property 4: Auth resolution maps owners and monitors correctly', () =>
     let capturedCtx = null;
     const { unmount } = renderWithAuth((ctx) => { capturedCtx = ctx; });
 
+    const mockUser = {
+      uid: 'monitor-uid',
+      email: 'monitor@test.com',
+      getIdTokenResult: vi.fn().mockResolvedValue({ claims: {} }),
+    };
+
     await act(async () => {
-      authStateCallback?.({ uid: 'monitor-uid', email: 'monitor@test.com' });
+      authStateCallback?.(mockUser);
     });
 
     await new Promise(resolve => setTimeout(resolve, 0));

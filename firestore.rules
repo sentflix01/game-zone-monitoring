@@ -3,10 +3,16 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // userIndex: only the user themselves can read their own entry.
-    // Only written by the owner client when creating a monitor.
+    // Only written by Cloud Functions (admin SDK bypasses rules).
     match /userIndex/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if request.auth != null;
+      allow write: if false; // Cloud Functions only
+    }
+
+    // monitorCredentials: contains bcrypt hashes — server-side only.
+    // Cloud Functions use the admin SDK and bypass these rules entirely.
+    match /monitorCredentials/{emailKey} {
+      allow read, write: if false;
     }
 
     // Owner document: only the owner can read/write their own profile
@@ -20,15 +26,28 @@ service cloud.firestore {
           // Owner accessing their own data
           request.auth.uid == ownerId
           ||
-          // Monitor: they have a userIndex entry pointing to this ownerId
+          // Monitor via userIndex entry
           (exists(/databases/$(database)/documents/userIndex/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/userIndex/$(request.auth.uid)).data.ownerId == ownerId)
+          ||
+          // Dual-role monitor via custom token claims
+          (request.auth.token.get('role', '') == 'monitor' &&
+           request.auth.token.get('ownerId', '') == ownerId)
         );
       }
 
       // users subcollection (monitor accounts list) — owner only
       match /users/{userId} {
         allow read, write: if request.auth != null && request.auth.uid == ownerId;
+      }
+
+      // notifications subcollection — owner can read and mark as read (update)
+      // Only Cloud Functions write new notifications
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == ownerId;
+        allow update: if request.auth != null && request.auth.uid == ownerId
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create, delete: if false; // Cloud Functions only
       }
     }
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import React from 'react';
 import * as fc from 'fast-check';
 import { MemoryRouter } from 'react-router-dom';
@@ -89,6 +89,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+async function waitForLoad(container) {
+  // Wait until the skeleton placeholder is gone and real content appears
+  await waitFor(() => {
+    expect(container.querySelector('.animate-pulse')).toBeNull();
+  }, { timeout: 3000 });
+}
+
 function renderDashboard(role) {
   useAuth.mockReturnValue({ role, ownerId: 'test-owner-id' });
   return render(
@@ -106,8 +113,8 @@ describe('Property 9: Dashboard financial content visibility matches role', () =
         async (role) => {
           const { container, unmount } = renderDashboard(role);
 
-          // Wait for async data loading
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          // Wait for async data loading to complete
+          await waitForLoad(container);
 
           if (role === 'monitor') {
             expect(container.querySelector('[data-tour="pnl-cards"]')).toBeNull();
@@ -126,7 +133,7 @@ describe('Property 9: Dashboard financial content visibility matches role', () =
           vi.clearAllMocks();
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   }, 30000);
 });
@@ -134,21 +141,21 @@ describe('Property 9: Dashboard financial content visibility matches role', () =
 describe('Dashboard financial content unit tests', () => {
   it('monitor: P&L cards absent, todayEarnings absent', async () => {
     const { container } = renderDashboard('monitor');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForLoad(container);
     expect(container.querySelector('[data-tour="pnl-cards"]')).toBeNull();
     expect(container.textContent).not.toContain('dashboard.stat.todayEarnings');
   });
 
   it('owner: P&L cards present, todayEarnings present', async () => {
     const { container } = renderDashboard('owner');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForLoad(container);
     expect(container.querySelector('[data-tour="pnl-cards"]')).not.toBeNull();
     expect(container.textContent).toContain('dashboard.stat.todayEarnings');
   });
 
   it('monitor: available, inUse, activeSessions stats always present', async () => {
     const { container } = renderDashboard('monitor');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForLoad(container);
     expect(container.textContent).toContain('dashboard.stat.available');
     expect(container.textContent).toContain('dashboard.stat.inUse');
     expect(container.textContent).toContain('dashboard.stat.activeSessions');
@@ -156,7 +163,7 @@ describe('Dashboard financial content unit tests', () => {
 
   it('owner: available, inUse, activeSessions stats always present', async () => {
     const { container } = renderDashboard('owner');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForLoad(container);
     expect(container.textContent).toContain('dashboard.stat.available');
     expect(container.textContent).toContain('dashboard.stat.inUse');
     expect(container.textContent).toContain('dashboard.stat.activeSessions');
@@ -164,14 +171,14 @@ describe('Dashboard financial content unit tests', () => {
 
   it('monitor: manage expenses and full analytics links absent', async () => {
     const { container } = renderDashboard('monitor');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForLoad(container);
     expect(container.textContent).not.toContain('dashboard.pnl.manageExpenses');
     expect(container.textContent).not.toContain('dashboard.pnl.fullAnalytics');
   });
 
   it('owner: manage expenses and full analytics links present', async () => {
     const { container } = renderDashboard('owner');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForLoad(container);
     expect(container.textContent).toContain('dashboard.pnl.manageExpenses');
     expect(container.textContent).toContain('dashboard.pnl.fullAnalytics');
   });

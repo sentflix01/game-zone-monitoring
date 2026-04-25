@@ -4,6 +4,8 @@ import { Clock, DollarSign, Calendar } from "lucide-react";
 import { useTranslation } from "@/i18n/I18nContext";
 import { useAuth } from "@/lib/AuthContext";
 
+import PageSkeleton from "@/components/PageSkeleton";
+
 export default function Sessions() {
   const { t } = useTranslation();
   const { ownerId } = useAuth();
@@ -46,11 +48,7 @@ export default function Sessions() {
     .filter((s) => s.status === "completed" && new Date(s.start_time).toDateString() === today)
     .reduce((sum, s) => sum + (s.amount_charged || 0), 0);
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton rows={6} />;
 
   return (
     <div className="space-y-6">

@@ -64,7 +64,7 @@ All changes are confined to `src/pages/Consoles.jsx`. The implementation adds ne
     - **Property 8: Invalid game entry rejected**
     - **Validates: Requirements 2.6**
 
-- [ ] 6. Add Running List and Running Total display to Session Dialog
+- [x] 6. Add Running List and Running Total display to Session Dialog
   - Render the running list below the Add Game form when `runningGames.length > 0`; each row shows game name, price, and a remove (×) button that splices the entry from `runningGames`
   - Below the list render "Total: {runningTotal}" where `runningTotal = runningGames.reduce((s,g)=>s+g.price,0)`
   - _Requirements: 2.2, 2.3, 2.4_

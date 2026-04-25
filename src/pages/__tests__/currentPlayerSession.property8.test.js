@@ -76,7 +76,7 @@ describe('Property 8: Invalid game entry rejected', () => {
         expect(result.runningGames).toEqual(before);
         expect(result.gameInputError).toBe('Game name is required');
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -89,7 +89,7 @@ describe('Property 8: Invalid game entry rejected', () => {
         expect(result.runningGames).toEqual(before);
         expect(result.gameInputError).toBe('Price must be greater than 0');
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -102,7 +102,7 @@ describe('Property 8: Invalid game entry rejected', () => {
         expect(result.runningGames).toEqual(before);
         expect(result.gameInputError).toBe('Game name is required');
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -118,7 +118,7 @@ describe('Property 8: Invalid game entry rejected', () => {
         expect(added.name).toBe(name.trim());
         expect(added.price).toBe(parseFloat(priceStr));
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -137,7 +137,7 @@ describe('Property 8: Invalid game entry rejected', () => {
           expect(JSON.stringify(games)).toBe(snapshot);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

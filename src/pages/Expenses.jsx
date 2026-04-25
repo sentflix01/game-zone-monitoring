@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import PageSkeleton from "@/components/PageSkeleton";
 
 const CATEGORIES = ["snacks", "repairs", "utilities", "rent", "salaries", "other"];
 const CATEGORY_COLORS = {
@@ -56,7 +57,7 @@ export default function Expenses() {
   const todayTotal = expenses.filter((e) => e.date === today).reduce((s, e) => s + (e.amount || 0), 0);
   const monthTotal = expenses.filter((e) => e.date?.startsWith(thisMonth)).reduce((s, e) => s + (e.amount || 0), 0);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" /></div>;
+  if (loading) return <PageSkeleton rows={4} />;
 
   return (
     <div className="space-y-6 max-w-2xl">

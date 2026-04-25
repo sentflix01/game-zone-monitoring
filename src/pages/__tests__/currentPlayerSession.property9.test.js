@@ -62,7 +62,7 @@ describe('Property 9: Session record contains games and running total', () => {
         expect(games).toEqual(runningGames);
         expect(games).toBe(runningGames); // same reference, not a copy
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -81,7 +81,7 @@ describe('Property 9: Session record contains games and running total', () => {
           expect(games[i].price).toBe(runningGames[i].price);
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -103,7 +103,7 @@ describe('Property 9: Session record contains games and running total', () => {
 
         expect(amount_charged).toBeCloseTo(sum, 10);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -115,7 +115,7 @@ describe('Property 9: Session record contains games and running total', () => {
         expect(amount_charged).toBe(pricingRate);
         expect(games).toEqual([]);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

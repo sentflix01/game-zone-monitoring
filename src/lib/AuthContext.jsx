@@ -3,14 +3,35 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { firestoreClient } from '@/api/firestoreClient';
 
+const AUTH_CACHE_KEY = 'gamezone_auth_cache';
+
+function readAuthCache() {
+  try {
+    const raw = localStorage.getItem(AUTH_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function writeAuthCache(uid, role, ownerId) {
+  try { localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({ uid, role, ownerId })); } catch {}
+}
+
+function clearAuthCache() {
+  try { localStorage.removeItem(AUTH_CACHE_KEY); } catch {}
+}
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  // Seed initial state from cache so the app renders immediately on return visits
+  const _cache = readAuthCache();
+
   const [user, setUser]                   = useState(null);
-  const [role, setRoleState]              = useState(null);   // 'owner' | 'monitor'
-  const [ownerId, setOwnerId]             = useState(null);   // the owner's UID (same as uid if owner)
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [role, setRoleState]              = useState(_cache?.role ?? null);
+  const [ownerId, setOwnerId]             = useState(_cache?.ownerId ?? null);
+  const [isAuthenticated, setIsAuthenticated] = useState(!!_cache);
+  // If we have a cache hit, skip the loading spinner entirely
+  const [isLoadingAuth, setIsLoadingAuth] = useState(!_cache);
   const [authError, setAuthError]         = useState(null);
 
   useEffect(() => {
@@ -32,6 +53,7 @@ export const AuthProvider = ({ children }) => {
       setAuthError(null);
 
       if (!firebaseUser) {
+        clearAuthCache();
         setUser(null);
         setRoleState(null);
         setOwnerId(null);
@@ -41,11 +63,27 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        // Check if this uid belongs to a monitor (has a userIndex entry)
+        // ── Fast path: check custom token claims first ──
+        // monitorSignIn issues tokens with { role: "monitor", ownerId } claims.
+        // This handles dual-role users (existing owners acting as monitors)
+        // without needing a userIndex entry.
+        const tokenResult = await firebaseUser.getIdTokenResult();
+        if (tokenResult.claims.role === 'monitor' && tokenResult.claims.ownerId) {
+          writeAuthCache(firebaseUser.uid, 'monitor', tokenResult.claims.ownerId);
+          setUser(firebaseUser);
+          setRoleState('monitor');
+          setOwnerId(tokenResult.claims.ownerId);
+          setIsAuthenticated(true);
+          setIsLoadingAuth(false);
+          return;
+        }
+
+        // ── Standard path: check userIndex for regular monitors ──
         const monitorOwnerId = await firestoreClient.getMonitorOwner(firebaseUser.uid);
 
         if (monitorOwnerId) {
           // This user is a MONITOR — scoped to their owner's data
+          writeAuthCache(firebaseUser.uid, 'monitor', monitorOwnerId);
           setUser(firebaseUser);
           setRoleState('monitor');
           setOwnerId(monitorOwnerId);
@@ -59,6 +97,7 @@ export const AuthProvider = ({ children }) => {
               displayName: firebaseUser.displayName || '',
             });
           }
+          writeAuthCache(firebaseUser.uid, 'owner', firebaseUser.uid);
           setUser(firebaseUser);
           setRoleState('owner');
           setOwnerId(firebaseUser.uid);
@@ -67,6 +106,7 @@ export const AuthProvider = ({ children }) => {
       } catch (err) {
         console.error('[AuthContext] resolveUser failed:', err);
         // Fallback: treat as owner using their own uid
+        writeAuthCache(firebaseUser.uid, 'owner', firebaseUser.uid);
         setUser(firebaseUser);
         setRoleState('owner');
         setOwnerId(firebaseUser.uid);
@@ -109,6 +149,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       setAuthError(error?.message || 'Failed to sign out');
     } finally {
+      clearAuthCache();
       setUser(null);
       setRoleState(null);
       setOwnerId(null);

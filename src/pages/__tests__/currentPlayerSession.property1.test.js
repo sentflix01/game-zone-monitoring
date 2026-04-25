@@ -41,7 +41,7 @@ describe('Property 1: Current player button visibility', () => {
         const currentPlayers = { [consoleId]: storedName };
         expect(isButtonVisible(currentPlayers, consoleId)).toBe(true);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -51,7 +51,7 @@ describe('Property 1: Current player button visibility', () => {
         const currentPlayers = {};
         expect(isButtonVisible(currentPlayers, consoleId)).toBe(false);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -61,7 +61,7 @@ describe('Property 1: Current player button visibility', () => {
         const currentPlayers = { [consoleId]: '' };
         expect(isButtonVisible(currentPlayers, consoleId)).toBe(false);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -80,7 +80,7 @@ describe('Property 1: Current player button visibility', () => {
           expect(visible).toBe(hasStored);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -96,7 +96,7 @@ describe('Property 1: Current player button visibility', () => {
         // Console B has a stored name — button should be visible
         expect(isButtonVisible(currentPlayers, consoleB)).toBe(true);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

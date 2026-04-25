@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, subMonths } from "date-fns";
 import { useAuth } from "@/lib/AuthContext";
+import PageSkeleton from "@/components/PageSkeleton";
 
 const CATEGORY_COLORS = { snacks: "#eab308", repairs: "#ef4444", utilities: "#3b82f6", rent: "#a855f7", salaries: "#22c55e", other: "#6b7280" };
 const chartStyle = { backgroundColor: "hsl(222 47% 8%)", border: "1px solid hsl(222 30% 14%)", borderRadius: "8px", color: "#fff" };
@@ -94,7 +95,7 @@ export default function Analytics() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" /></div>;
+  if (loading) return <PageSkeleton rows={4} />;
 
   const kpis = [
     { labelKey: 'analytics.kpi.earnings', value: `$${monthEarnings.toFixed(2)}`, color: "text-green-400", border: "border-green-500/20", icon: DollarSign },

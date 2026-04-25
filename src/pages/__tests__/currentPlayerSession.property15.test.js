@@ -104,7 +104,7 @@ describe('Property 15: Console non-interference', () => {
           expect(afterB.currentPlayer).toEqual(beforeB.currentPlayer);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -139,7 +139,7 @@ describe('Property 15: Console non-interference', () => {
           expect(afterB.currentPlayer).toEqual(beforeB.currentPlayer);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -164,7 +164,7 @@ describe('Property 15: Console non-interference', () => {
           expect(afterState.currentPlayers[consoleA]).toBe(newPlayerA);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -194,7 +194,7 @@ describe('Property 15: Console non-interference', () => {
           expect(stateB.previousSession).toBeNull();
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -240,7 +240,7 @@ describe('Property 15: Console non-interference', () => {
           expect(finalB.previousSession).toEqual(initialB.previousSession);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

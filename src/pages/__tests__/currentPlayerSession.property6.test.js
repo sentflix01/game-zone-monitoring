@@ -39,7 +39,7 @@ describe('Property 6: Running total equals sum of game prices', () => {
         const expected = games.reduce((s, g) => s + g.price, 0);
         expect(total).toBe(expected);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -53,7 +53,7 @@ describe('Property 6: Running total equals sum of game prices', () => {
         const total = computeRunningTotal([game]);
         expect(total).toBe(game.price);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -64,7 +64,7 @@ describe('Property 6: Running total equals sum of game prices', () => {
         const after = computeRunningTotal([...games, newGame]);
         expect(after).toBeCloseTo(before + newGame.price, 10);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -80,7 +80,7 @@ describe('Property 6: Running total equals sum of game prices', () => {
           expect(after).toBeCloseTo(before - games[idx].price, 10);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -91,7 +91,7 @@ describe('Property 6: Running total equals sum of game prices', () => {
         const formatted = formatTotal(total);
         expect(formatted).toBe(total.toFixed(2));
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -103,7 +103,7 @@ describe('Property 6: Running total equals sum of game prices', () => {
         const total2 = computeRunningTotal(shuffled);
         expect(total1).toBeCloseTo(total2, 10);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

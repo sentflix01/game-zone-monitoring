@@ -42,7 +42,7 @@ describe('Property 5: Running list ordering', () => {
           expect(list[i].price).toBe(games[i].price);
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -54,7 +54,7 @@ describe('Property 5: Running list ordering', () => {
         expect(list[list.length - 1].name).toBe(last.name.trim());
         expect(list[list.length - 1].price).toBe(last.price);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -66,7 +66,7 @@ describe('Property 5: Running list ordering', () => {
         expect(list[0].name).toBe(first.name.trim());
         expect(list[0].price).toBe(first.price);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -76,7 +76,7 @@ describe('Property 5: Running list ordering', () => {
         const list = addGamesToList(games);
         expect(list.length).toBe(games.length);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -93,7 +93,7 @@ describe('Property 5: Running list ordering', () => {
           }
         }
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

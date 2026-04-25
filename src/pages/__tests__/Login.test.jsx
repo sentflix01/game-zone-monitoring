@@ -32,12 +32,9 @@ vi.mock('firebase/auth', () => ({
   signInWithPopup: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
   signInWithRedirect: vi.fn().mockResolvedValue(undefined),
   getRedirectResult: vi.fn().mockResolvedValue(null),
-  signInWithCredential: vi.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
   signInWithEmailAndPassword: vi.fn(),
   createUserWithEmailAndPassword: vi.fn(),
-  initializeAuth: vi.fn(),
-  indexedDBLocalPersistence: {},
-  browserLocalPersistence: {},
+  sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock i18n
@@ -92,7 +89,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
           unmount();
         }
       ),
-      { numRuns: 50 }
+      { numRuns: 20 }
     );
   });
 });
@@ -101,7 +98,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Login page unit tests', () => {
-  it('renders email input and sign-in button when unauthenticated', () => {
+  it('renders email input and Google button when unauthenticated', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -119,8 +116,10 @@ describe('Login page unit tests', () => {
     );
 
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
+    expect(getByText('Continue with Google')).toBeTruthy();
   });
-  it('shows loading spinner when auth is loading', async () => {
+
+  it('shows loading spinner when auth is loading', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: true,

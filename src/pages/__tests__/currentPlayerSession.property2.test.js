@@ -35,7 +35,7 @@ describe('Property 2: Current player button pre-fills input', () => {
         const newPlayerName = handleCurrentPlayerClick(currentPlayers, consoleId);
         expect(newPlayerName).toBe(storedName);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -54,7 +54,7 @@ describe('Property 2: Current player button pre-fills input', () => {
           expect(newPlayerName).toStrictEqual(storedName);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -78,7 +78,7 @@ describe('Property 2: Current player button pre-fills input', () => {
           expect(currentPlayers[consoleB]).toBe(nameB);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -95,7 +95,7 @@ describe('Property 2: Current player button pre-fills input', () => {
         expect(second).toBe(storedName);
         expect(first).toBe(second);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

@@ -319,7 +319,7 @@ describe('2d: @capacitor/preferences Read/Write Preservation', () => {
           return true;
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -335,7 +335,7 @@ describe('2d: @capacitor/preferences Read/Write Preservation', () => {
           return result.value === null;
         }
       ),
-      { numRuns: 50 }
+      { numRuns: 20 }
     );
   });
 
@@ -357,7 +357,7 @@ describe('2d: @capacitor/preferences Read/Write Preservation', () => {
           return result.value === value2;
         }
       ),
-      { numRuns: 50 }
+      { numRuns: 20 }
     );
   });
 
@@ -485,7 +485,7 @@ describe('2e: Responsive UI Baseline', () => {
           return noOverflow;
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 

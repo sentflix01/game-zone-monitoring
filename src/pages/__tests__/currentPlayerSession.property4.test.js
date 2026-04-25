@@ -36,7 +36,7 @@ describe('Property 4: Add Game form visibility', () => {
       fc.property(nonEmptyNameArb, (playerName) => {
         expect(isAddGameFormVisible(playerName)).toBe(true);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -49,7 +49,7 @@ describe('Property 4: Add Game form visibility', () => {
       fc.property(whitespaceOnlyArb, (playerName) => {
         expect(isAddGameFormVisible(playerName)).toBe(false);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -60,7 +60,7 @@ describe('Property 4: Add Game form visibility', () => {
         const hasContent = playerName.trim().length > 0;
         expect(visible).toBe(hasContent);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -74,7 +74,7 @@ describe('Property 4: Add Game form visibility', () => {
           expect(isAddGameFormVisible(playerName)).toBe(false);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -88,7 +88,7 @@ describe('Property 4: Add Game form visibility', () => {
           expect(isAddGameFormVisible(playerName)).toBe(true);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

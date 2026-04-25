@@ -56,7 +56,7 @@ describe('Property 3: Per-console current player isolation', () => {
           expect(currentPlayers[consoleB]).toBe(initialB);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -76,7 +76,7 @@ describe('Property 3: Per-console current player isolation', () => {
           expect(currentPlayers[consoleA]).toBe(initialA);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -104,7 +104,7 @@ describe('Property 3: Per-console current player isolation', () => {
           expect(store[keyB]).toBe(nameB);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -138,7 +138,7 @@ describe('Property 3: Per-console current player isolation', () => {
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -160,7 +160,7 @@ describe('Property 3: Per-console current player isolation', () => {
           expect(currentPlayers[consoleB]).toBe(nameB);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

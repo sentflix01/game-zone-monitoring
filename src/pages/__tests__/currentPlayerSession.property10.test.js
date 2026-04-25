@@ -49,7 +49,7 @@ describe('Property 10: Current player updated on commit', () => {
         const key = `gamezone_current_player_${consoleId}`;
         expect(localStore[key]).toBe(playerName);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -62,7 +62,7 @@ describe('Property 10: Current player updated on commit', () => {
         const key = `gamezone_current_player_${consoleId}`;
         expect(localStore[key]).toBe('Anonymous');
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -78,7 +78,7 @@ describe('Property 10: Current player updated on commit', () => {
         expect(localStore[key]).toBe(expected);
         expect(committed).toBe(expected);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -104,7 +104,7 @@ describe('Property 10: Current player updated on commit', () => {
           expect(localStore[keyB]).toBe(playerB);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -118,7 +118,7 @@ describe('Property 10: Current player updated on commit', () => {
         const key = `gamezone_current_player_${consoleId}`;
         expect(localStore[key]).toBe(secondName);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

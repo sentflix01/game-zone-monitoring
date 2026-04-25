@@ -3,17 +3,21 @@ import { storageAdapter } from "@/api/storageAdapter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { DollarSign, RotateCcw } from "lucide-react";
+import { DollarSign, RotateCcw, ShieldCheck } from "lucide-react";
 import { useTranslation } from "@/i18n/I18nContext";
 import { useTour } from "@/contexts/TourContext";
 import RoleGuard from "@/components/RoleGuard";
 import { useAuth } from "@/lib/AuthContext";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
+
+import PageSkeleton from "@/components/PageSkeleton";
 
 export default function Settings() {
   const { t } = useTranslation();
   const { restartTour } = useTour();
-  const { user, ownerId } = useAuth();
+  const { user, ownerId, role } = useAuth();
   const [promoteUid, setPromoteUid] = useState("");
   const [pricing, setPricing] = useState([]);
   const [rates, setRates] = useState({ PS5: "", PS4: "" });
@@ -25,6 +29,16 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
+
+  // Monitor self-service state
+  const [monitorCurrentPw, setMonitorCurrentPw]     = useState("");
+  const [monitorNewPw, setMonitorNewPw]             = useState("");
+  const [monitorConfirmPw, setMonitorConfirmPw]     = useState("");
+  const [monitorPwError, setMonitorPwError]         = useState("");
+  const [monitorPwLoading, setMonitorPwLoading]     = useState(false);
+  const [monitorNewEmail, setMonitorNewEmail]       = useState("");
+  const [monitorEmailPw, setMonitorEmailPw]         = useState("");
+  const [monitorEmailLoading, setMonitorEmailLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,11 +79,7 @@ export default function Settings() {
     toast.success(t('settings.toast.saved'));
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton rows={3} />;
 
   return (
     <div className="max-w-lg space-y-6">
@@ -227,9 +237,139 @@ export default function Settings() {
         <h3 className="text-white font-semibold">Your Account</h3>
         <p className="text-game-muted text-xs">
           Signed in as <span className="text-white font-medium">{user?.email}</span>.
-          You are an <span className="text-blue-400 font-semibold">Owner</span> — you have full access to all data and can manage monitors.
+          {role === 'owner'
+            ? <> You are an <span className="text-blue-400 font-semibold">Owner</span> — you have full access to all data and can manage monitors.</>
+            : <> You are a <span className="text-purple-400 font-semibold">Monitor</span> — you can manage consoles and sessions for this zone.</>
+          }
         </p>
       </div>
+
+      {/* ── Monitor Account section — visible only to monitors ── */}
+      {role === 'monitor' && (
+        <div className="bg-game-surface border border-purple-500/30 rounded-xl p-6 space-y-6">
+          <h3 className="text-white font-semibold flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-purple-400" />
+            Monitor Account
+          </h3>
+          <p className="text-game-muted text-xs -mt-2">
+            Manage your monitor credentials for this zone. Changes notify your zone owner.
+          </p>
+
+          {/* Change monitor password */}
+          <div className="space-y-3">
+            <h4 className="text-white text-sm font-medium">Change Monitor Password</h4>
+            <Input
+              type="password"
+              value={monitorCurrentPw}
+              onChange={(e) => { setMonitorCurrentPw(e.target.value); setMonitorPwError(""); }}
+              placeholder="Current monitor password"
+              className="bg-game-bg border-game-border text-white"
+              autoComplete="current-password"
+            />
+            <Input
+              type="password"
+              value={monitorNewPw}
+              onChange={(e) => { setMonitorNewPw(e.target.value); setMonitorPwError(""); }}
+              placeholder="New monitor password"
+              className="bg-game-bg border-game-border text-white"
+              autoComplete="new-password"
+            />
+            <Input
+              type="password"
+              value={monitorConfirmPw}
+              onChange={(e) => { setMonitorConfirmPw(e.target.value); setMonitorPwError(""); }}
+              placeholder="Confirm new password"
+              className="bg-game-bg border-game-border text-white"
+              autoComplete="new-password"
+            />
+            {monitorPwError && (
+              <p className="text-red-400 text-xs">{monitorPwError}</p>
+            )}
+            <Button
+              disabled={monitorPwLoading}
+              onClick={async () => {
+                if (!monitorCurrentPw || !monitorNewPw || !monitorConfirmPw) {
+                  setMonitorPwError("Fill in all password fields.");
+                  return;
+                }
+                if (monitorNewPw.length < 6) {
+                  setMonitorPwError("New password must be at least 6 characters.");
+                  return;
+                }
+                if (monitorNewPw !== monitorConfirmPw) {
+                  setMonitorPwError("New passwords do not match.");
+                  return;
+                }
+                setMonitorPwLoading(true);
+                try {
+                  const fn = httpsCallable(functions, 'updateMonitorPassword');
+                  await fn({ currentPassword: monitorCurrentPw, newPassword: monitorNewPw });
+                  setMonitorCurrentPw(""); setMonitorNewPw(""); setMonitorConfirmPw("");
+                  toast.success("Monitor password updated. Your zone owner has been notified.");
+                } catch (err) {
+                  const msg = err.code === 'functions/unauthenticated'
+                    ? 'Current password is incorrect.'
+                    : err?.message || 'Failed to update password.';
+                  toast.error(msg);
+                } finally {
+                  setMonitorPwLoading(false);
+                }
+              }}
+              className="w-full bg-purple-600 hover:bg-purple-500 text-white"
+            >
+              {monitorPwLoading ? "Updating..." : "Update Monitor Password"}
+            </Button>
+          </div>
+
+          <div className="border-t border-game-border pt-4 space-y-3">
+            <h4 className="text-white text-sm font-medium">Change Monitor Email</h4>
+            <Input
+              type="email"
+              value={monitorNewEmail}
+              onChange={(e) => setMonitorNewEmail(e.target.value)}
+              placeholder="New email address"
+              className="bg-game-bg border-game-border text-white"
+              autoComplete="email"
+            />
+            <Input
+              type="password"
+              value={monitorEmailPw}
+              onChange={(e) => setMonitorEmailPw(e.target.value)}
+              placeholder="Current monitor password"
+              className="bg-game-bg border-game-border text-white"
+              autoComplete="current-password"
+            />
+            <Button
+              disabled={monitorEmailLoading}
+              onClick={async () => {
+                if (!monitorNewEmail.trim() || !monitorEmailPw) {
+                  toast.error("Fill in new email and current password.");
+                  return;
+                }
+                setMonitorEmailLoading(true);
+                try {
+                  const fn = httpsCallable(functions, 'updateMonitorEmail');
+                  await fn({ currentPassword: monitorEmailPw, newEmail: monitorNewEmail.trim() });
+                  setMonitorNewEmail(""); setMonitorEmailPw("");
+                  toast.success("Monitor email updated. Your zone owner has been notified.");
+                } catch (err) {
+                  const msg = err.code === 'functions/unauthenticated'
+                    ? 'Current password is incorrect.'
+                    : err.code === 'functions/already-exists'
+                    ? 'That email is already in use.'
+                    : err?.message || 'Failed to update email.';
+                  toast.error(msg);
+                } finally {
+                  setMonitorEmailLoading(false);
+                }
+              }}
+              className="w-full bg-purple-600 hover:bg-purple-500 text-white"
+            >
+              {monitorEmailLoading ? "Updating..." : "Update Monitor Email"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div data-tour="restart-tour" className="bg-game-surface border border-game-border rounded-xl p-6 space-y-3">
         <h3 className="text-white font-semibold">{t('settings.tour.title')}</h3>

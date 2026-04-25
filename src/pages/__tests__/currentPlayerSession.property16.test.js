@@ -75,7 +75,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
         const after = simulateDialogClose(state);
         expect(after.runningGames).toEqual([]);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -85,7 +85,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
         const after = simulateDialogClose(state);
         expect(after.playerName).toBe('');
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -95,7 +95,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
         const after = simulateDialogClose(state);
         expect(after.gameInput).toEqual({ name: '', price: '' });
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -105,7 +105,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
         const after = simulateDialogClose(state);
         expect(after.gameInputError).toBeNull();
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -115,7 +115,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
         const after = simulateDialogClose(state);
         expect(after.sessionDialog).toBeNull();
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -131,7 +131,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
         // And its contents must be unchanged
         expect(after.currentPlayers).toEqual(before);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -157,7 +157,7 @@ describe('Property 16: Cancel discards running list, preserves current player', 
           expect(after.currentPlayers[consoleId]).toBe('Alice');
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

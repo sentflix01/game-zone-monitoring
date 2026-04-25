@@ -8,6 +8,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { subDays } from "date-fns";
 import { useAuth } from "@/lib/AuthContext";
 
+import PageSkeleton from "@/components/PageSkeleton";
+
 const chartStyle = { backgroundColor: "hsl(222 47% 8%)", border: "1px solid hsl(222 30% 14%)", borderRadius: "8px", color: "#fff" };
 
 function safeMatchMedia(query) {
@@ -117,11 +119,7 @@ export default function Dashboard() {
   ];
   const earningsStat = { labelKey: 'dashboard.stat.todayEarnings', value: todayEarnings.toFixed(2), icon: DollarSign, color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-500/20" };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton rows={4} />;
 
   return (
     <div className="space-y-6">

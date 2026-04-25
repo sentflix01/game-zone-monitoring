@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+dev-dist/
 release/
 
 # Capacitor generated (keep android/ and ios/ source, ignore build artifacts)

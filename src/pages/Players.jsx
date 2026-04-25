@@ -4,6 +4,8 @@ import { useTranslation } from "@/i18n/I18nContext";
 import { Trophy, Clock, DollarSign, Monitor, User } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 
+import PageSkeleton from "@/components/PageSkeleton";
+
 export default function Players() {
   const { t } = useTranslation();
   const { ownerId } = useAuth();
@@ -51,12 +53,7 @@ export default function Players() {
     return `#${i + 1}`;
   };
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-      </div>
-    );
+  if (loading) return <PageSkeleton rows={5} />;
 
   if (players.length === 0)
     return (

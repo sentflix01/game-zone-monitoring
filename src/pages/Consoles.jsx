@@ -10,6 +10,8 @@ import { useTranslation } from "@/i18n/I18nContext";
 import RoleGuard from "@/components/RoleGuard";
 import { useAuth } from "@/lib/AuthContext";
 
+import PageSkeleton from "@/components/PageSkeleton";
+
 function formatDuration(secs) {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -48,6 +50,11 @@ export default function Consoles() {
   const tickRef = useRef(null);
   const [startDialog, setStartDialog] = useState(null);
   const [startForm, setStartForm] = useState({ playerName: "", phone: "" });
+  const [currentPlayers, setCurrentPlayers] = useState({});
+  const [runningGames, setRunningGames] = useState([]);
+  const [gameInput, setGameInput] = useState({ name: "", price: "" });
+  const [gameInputError, setGameInputError] = useState(null);
+  const [playerName, setPlayerName] = useState("");
 
   const load = async () => {
     if (!ownerId) return;
@@ -58,6 +65,15 @@ export default function Consoles() {
       ]);
       setConsoles(c);
       setPricing(p);
+      // Load current players from localStorage
+      const cp = {};
+      for (const con of c) {
+        try {
+          const stored = localStorage.getItem("gamezone_current_player_" + con.id);
+          if (stored) cp[con.id] = stored;
+        } catch (_) {}
+      }
+      setCurrentPlayers(cp);
     } catch (error) {
       console.error("Consoles failed to load:", error);
     } finally {
@@ -144,15 +160,29 @@ export default function Consoles() {
     }
 
     setStartForm({ playerName: "", phone: "" });
+    setPlayerName("");
+    setRunningGames([]);
+    setGameInput({ name: "", price: "" });
+    setGameInputError(null);
     setStartDialog(c);
   };
 
   const confirmStart = async () => {
     const c = startDialog;
-    if (!startForm.playerName.trim()) return toast.error("Player name is required");
+    const nameToUse = playerName.trim() || startForm.playerName.trim();
+    if (!nameToUse) return toast.error("Player name is required");
 
-    const name = startForm.playerName.trim();
+    const name = nameToUse;
     const phone = startForm.phone.trim();
+
+    // Compute amount_charged and games from runningGames
+    const runningTotal = runningGames.reduce((s, g) => s + g.price, 0);
+    const amountCharged = runningGames.length > 0
+      ? runningTotal
+      : (() => {
+          const rate = pricing.find((p) => p.console_type === c.type);
+          return rate ? parseFloat((rate.hourly_rate).toFixed(2)) : 0;
+        })();
 
     await storageAdapter.entities.Console.update(ownerId, c.id, { status: "occupied" });
     await storageAdapter.entities.Session.create(ownerId, {
@@ -163,11 +193,17 @@ export default function Consoles() {
       player_phone: phone || null,
       start_time: new Date().toISOString(),
       status: "active",
-      amount_charged: 0,
-      games: [],
+      amount_charged: amountCharged,
+      games: runningGames,
     });
 
     if (phone) sendWelcomeSMS(phone, c.name);
+
+    // Persist current player to localStorage
+    try {
+      localStorage.setItem("gamezone_current_player_" + c.id, name);
+    } catch (_) {}
+    setCurrentPlayers((prev) => ({ ...prev, [c.id]: name }));
 
     setConsoleState((prev) => ({
       ...prev,
@@ -181,7 +217,12 @@ export default function Consoles() {
       },
     }));
 
+    // Reset dialog state
     setStartDialog(null);
+    setPlayerName("");
+    setRunningGames([]);
+    setGameInput({ name: "", price: "" });
+    setGameInputError(null);
     toast.success("Session started for " + name);
   };
 
@@ -278,11 +319,7 @@ export default function Consoles() {
     toast.success("New session started for " + name);
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton rows={3} />;
 
   return (
     <div className="space-y-6">
@@ -432,7 +469,15 @@ export default function Consoles() {
       </Dialog>
 
       {/* Start Session Dialog */}
-      <Dialog open={!!startDialog} onOpenChange={(open) => { if (!open) setStartDialog(null); }}>
+      <Dialog open={!!startDialog} onOpenChange={(open) => {
+        if (!open) {
+          setStartDialog(null);
+          setPlayerName("");
+          setRunningGames([]);
+          setGameInput({ name: "", price: "" });
+          setGameInputError(null);
+        }
+      }}>
         <DialogContent className="bg-game-surface border-game-border text-white">
           <DialogHeader>
             <DialogTitle>{"Start Session \u2014 " + (startDialog ? startDialog.name : "")}</DialogTitle>
@@ -446,11 +491,25 @@ export default function Consoles() {
                 </span>
               </p>
             )}
+            {/* Current Player Button */}
+            {startDialog && currentPlayers[startDialog.id] && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-blue-500/40 text-blue-300 hover:bg-blue-600/20 text-sm"
+                onClick={() => setPlayerName(currentPlayers[startDialog.id])}
+              >
+                Use: {currentPlayers[startDialog.id]}
+              </Button>
+            )}
             <div>
               <label className="text-game-muted text-sm mb-1 block">Player Name</label>
               <Input
-                value={startForm.playerName}
-                onChange={(e) => setStartForm({ ...startForm, playerName: e.target.value })}
+                value={playerName || startForm.playerName}
+                onChange={(e) => {
+                  setPlayerName(e.target.value);
+                  setStartForm({ ...startForm, playerName: e.target.value });
+                }}
                 placeholder="Enter player name"
                 className="bg-game-bg border-game-border text-white"
                 autoFocus
@@ -467,6 +526,91 @@ export default function Consoles() {
                 className="bg-game-bg border-game-border text-white"
               />
             </div>
+
+            {/* Add Game Form — visible only when player name is non-empty */}
+            {(playerName || startForm.playerName).trim() && (
+              <div className="space-y-2 border border-game-border rounded-lg p-3">
+                <p className="text-game-muted text-xs font-medium">Add Game</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={gameInput.name}
+                    onChange={(e) => { setGameInput({ ...gameInput, name: e.target.value }); setGameInputError(null); }}
+                    placeholder="Game name"
+                    className="bg-game-bg border-game-border text-white flex-1"
+                  />
+                  <Input
+                    value={gameInput.price}
+                    onChange={(e) => { setGameInput({ ...gameInput, price: e.target.value }); setGameInputError(null); }}
+                    placeholder="Price"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    className="bg-game-bg border-game-border text-white w-24"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (!gameInput.name.trim()) {
+                        setGameInputError("Game name is required");
+                        return;
+                      }
+                      const price = parseFloat(gameInput.price);
+                      if (!gameInput.price || isNaN(price) || price <= 0) {
+                        setGameInputError("Price must be greater than 0");
+                        return;
+                      }
+                      setRunningGames([...runningGames, { name: gameInput.name.trim(), price }]);
+                      setGameInput({ name: "", price: "" });
+                      setGameInputError(null);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-3"
+                  >
+                    Add
+                  </Button>
+                </div>
+                {gameInputError && (
+                  <p className="text-red-400 text-xs">{gameInputError}</p>
+                )}
+              </div>
+            )}
+
+            {/* Running List — visible when there are games */}
+            {runningGames.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-game-muted text-xs font-medium">Games</p>
+                {runningGames.map((g, i) => {
+                  const rate = startDialog ? pricing.find((p) => p.console_type === startDialog.type) : null;
+                  const currency = rate?.currency || "ETB";
+                  return (
+                    <div key={i} className="flex items-center justify-between bg-game-bg border border-game-border rounded-lg px-3 py-2 text-xs">
+                      <span className="text-white font-medium flex-1 truncate">{g.name}</span>
+                      <span className="text-green-400 font-bold mx-3">{currency} {g.price.toFixed(2)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRunningGames(runningGames.filter((_, idx) => idx !== i))}
+                        className="text-red-400 hover:text-red-300 font-bold text-sm leading-none"
+                        aria-label="Remove game"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+                {/* Running Total */}
+                <div className="flex justify-between items-center px-3 py-2 border-t border-game-border mt-1">
+                  <span className="text-game-muted text-xs font-medium">Total:</span>
+                  <span className="text-yellow-400 font-bold text-sm">
+                    {(() => {
+                      const rate = startDialog ? pricing.find((p) => p.console_type === startDialog.type) : null;
+                      const currency = rate?.currency || "ETB";
+                      const total = runningGames.reduce((s, g) => s + g.price, 0);
+                      return currency + " " + total.toFixed(2);
+                    })()}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <Button onClick={confirmStart} className="w-full bg-green-600 hover:bg-green-500 text-white gap-2">
               <Play className="w-4 h-4" /> Start Session
             </Button>

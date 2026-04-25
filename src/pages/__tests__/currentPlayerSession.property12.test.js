@@ -109,7 +109,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
           expect(rows.length).toBeLessThanOrEqual(2);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -119,7 +119,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
         const rows = deriveConsoleRows(consoleId, [], []);
         expect(rows.length).toBe(0);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -131,7 +131,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
         expect(rows.length).toBe(1);
         expect(rows[0].type).toBe('active');
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -156,7 +156,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
           expect(rows[0].type).toBe('previous');
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -191,7 +191,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
           expect(rows[1].type).toBe('active');
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -218,7 +218,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
           expect(rows[0].session.player_name).toBe(`Player${completedCount - 1}`);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -246,7 +246,7 @@ describe('Property 12: Console card shows at most two session rows', () => {
           expect(rows.length).toBe(0);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });

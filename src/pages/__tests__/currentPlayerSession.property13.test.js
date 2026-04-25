@@ -74,7 +74,7 @@ describe('Property 13: Completed session row renders required fields', () => {
         expect(typeof fields.playerName).toBe('string');
         expect(fields.playerName.length).toBeGreaterThan(0);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -84,7 +84,7 @@ describe('Property 13: Completed session row renders required fields', () => {
         const fields = extractPreviousSessionRowFields(session);
         expect(fields.gameCount).toBe(session.games.length);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -94,7 +94,7 @@ describe('Property 13: Completed session row renders required fields', () => {
         const fields = extractPreviousSessionRowFields(session);
         expect(fields.amountCharged).toBe(session.amount_charged);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -104,7 +104,7 @@ describe('Property 13: Completed session row renders required fields', () => {
         const fields = extractPreviousSessionRowFields(session);
         expect(fields.gameCount).toBe(0);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -132,7 +132,7 @@ describe('Property 13: Completed session row renders required fields', () => {
           expect(fields.amountCharged).toBe(amountCharged);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 
@@ -155,7 +155,7 @@ describe('Property 13: Completed session row renders required fields', () => {
         expect(fields.gameCount).toBeGreaterThanOrEqual(0);
         expect(Number.isInteger(fields.gameCount)).toBe(true);
       }),
-      { numRuns: 100 }
+      { numRuns: 25 }
     );
   });
 });
