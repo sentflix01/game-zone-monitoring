@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { functions, auth } from '@/lib/firebase';
 import { firestoreClient } from '@/api/firestoreClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
-import { UserPlus, Trash2, UserCog, Eye, EyeOff, Bell, X, ShieldAlert } from 'lucide-react';
+import { UserPlus, Trash2, UserCog, Eye, EyeOff, Bell, X, ShieldAlert, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatDistanceToNow } from 'date-fns';
+import PageSkeleton from '@/components/PageSkeleton';
 
 export default function Monitors() {
   const { ownerId } = useAuth();
@@ -20,26 +22,28 @@ export default function Monitors() {
   const [displayName, setDisplayName]   = useState('');
   const [password, setPassword]         = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError]       = useState('');
 
-  // Dual-role warning: shown after createMonitor returns alreadyOwner: true
-  const [dualRoleWarning, setDualRoleWarning] = useState(null); // { displayName, email }
+  // Dual-role warning
+  const [dualRoleWarning, setDualRoleWarning] = useState(null);
 
   // Notifications
   const [notifications, setNotifications] = useState([]);
 
   async function loadMonitors() {
+    if (!ownerId) return;
     try {
       const list = await firestoreClient.listMonitors(ownerId);
       setMonitors(list);
     } catch (err) {
       console.error('Failed to load monitors:', err);
-      toast.error('Failed to load monitors.');
     } finally {
       setLoading(false);
     }
   }
 
   async function loadNotifications() {
+    if (!ownerId) return;
     try {
       const list = await firestoreClient.listNotifications(ownerId);
       setNotifications(list);
@@ -54,47 +58,104 @@ export default function Monitors() {
     loadNotifications();
   }, [ownerId]);
 
+  function resetForm() {
+    setEmail('');
+    setPassword('');
+    setDisplayName('');
+    setFormError('');
+    setShowForm(false);
+    setShowPassword(false);
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!email.trim() || !password || !displayName.trim()) {
-      toast.error('Fill in all fields.');
+      setFormError('Please fill in all fields.');
       return;
     }
     if (password.length < 6) {
-      toast.error('Password must be at least 6 characters.');
+      setFormError('Password must be at least 6 characters.');
       return;
     }
 
     setCreating(true);
+    setFormError('');
     setDualRoleWarning(null);
+
+    // ── Try Cloud Function first (deployed environment) ──
+    if (functions) {
+      try {
+        const createMonitorFn = httpsCallable(functions, 'createMonitor');
+        const result = await createMonitorFn({
+          email: email.trim(),
+          password,
+          displayName: displayName.trim(),
+        });
+
+        if (result.data.alreadyOwner) {
+          setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() });
+          toast.success(`Monitor "${displayName.trim()}" added (dual-role).`);
+        } else {
+          toast.success(`Monitor "${displayName.trim()}" created successfully.`);
+        }
+
+        resetForm();
+        await loadMonitors();
+        setCreating(false);
+        return;
+      } catch (err) {
+        // If function not deployed (not-found / internal), fall through to direct creation
+        const isFunctionMissing =
+          err.code === 'functions/not-found' ||
+          err.code === 'functions/internal' ||
+          err.code === 'functions/unavailable';
+
+        if (!isFunctionMissing) {
+          // Real error — show it
+          const msg =
+            err.code === 'functions/already-exists'
+              ? 'This email is already a monitor under your zone.'
+              : err.code === 'functions/invalid-argument'
+              ? 'Invalid details. Check all fields and try again.'
+              : err.message || 'Failed to create monitor.';
+          setFormError(msg);
+          setCreating(false);
+          return;
+        }
+        // Fall through to direct creation below
+      }
+    }
+
+    // ── Direct creation (when Cloud Function not deployed) ──
+    // Creates the Firebase Auth account and writes Firestore records directly.
     try {
-      const createMonitor = httpsCallable(functions, 'createMonitor');
-      const result = await createMonitor({
+      // Create Firebase Auth user
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const monitorUid = credential.user.uid;
+
+      // Set display name on the Auth profile
+      await updateProfile(credential.user, { displayName: displayName.trim() });
+
+      // Write to owners/{ownerId}/users/{monitorUid}
+      await firestoreClient.createMonitorDirect(ownerId, monitorUid, {
         email: email.trim(),
-        password,
         displayName: displayName.trim(),
+        isExistingOwner: false,
       });
 
-      if (result.data.alreadyOwner) {
-        // Show persistent dual-role warning — don't clear the form yet
-        setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() });
-      } else {
-        toast.success(`Monitor "${displayName}" created successfully.`);
-      }
-
-      setEmail('');
-      setPassword('');
-      setDisplayName('');
-      setShowForm(false);
+      toast.success(`Monitor "${displayName.trim()}" created successfully.`);
+      resetForm();
       await loadMonitors();
     } catch (err) {
       const msg =
-        err.code === 'functions/already-exists'
-          ? 'That email is already registered as a monitor under your zone.'
-          : err.code === 'functions/invalid-argument'
-          ? 'Invalid details provided.'
-          : err?.message || 'Failed to create monitor.';
-      toast.error(msg);
+        err.code === 'auth/email-already-in-use'
+          ? 'That email is already registered. Use a different email.'
+          : err.code === 'auth/invalid-email'
+          ? 'Invalid email address.'
+          : err.code === 'auth/weak-password'
+          ? 'Password must be at least 6 characters.'
+          : err.message || 'Failed to create monitor.';
+      setFormError(msg);
     } finally {
       setCreating(false);
     }
@@ -102,9 +163,29 @@ export default function Monitors() {
 
   async function handleRemove(monitor) {
     if (!window.confirm(`Remove monitor "${monitor.displayName || monitor.email}"? They will lose access immediately.`)) return;
+
+    if (functions) {
+      try {
+        const deleteMonitorFn = httpsCallable(functions, 'deleteMonitor');
+        await deleteMonitorFn({ monitorUid: monitor.id });
+        toast.success('Monitor removed.');
+        setMonitors((prev) => prev.filter((m) => m.id !== monitor.id));
+        return;
+      } catch (err) {
+        const isFunctionMissing =
+          err.code === 'functions/not-found' ||
+          err.code === 'functions/internal' ||
+          err.code === 'functions/unavailable';
+        if (!isFunctionMissing) {
+          toast.error('Failed to remove monitor.');
+          return;
+        }
+      }
+    }
+
+    // Direct removal fallback
     try {
-      const deleteMonitor = httpsCallable(functions, 'deleteMonitor');
-      await deleteMonitor({ monitorUid: monitor.id });
+      await firestoreClient.deleteMonitorDirect(ownerId, monitor.id);
       toast.success('Monitor removed.');
       setMonitors((prev) => prev.filter((m) => m.id !== monitor.id));
     } catch (err) {
@@ -136,6 +217,7 @@ export default function Monitors() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-white flex items-center gap-2">
           <UserCog className="w-6 h-6 text-blue-400" />
@@ -151,14 +233,11 @@ export default function Monitors() {
         </p>
       </div>
 
-      {/* Unread notifications panel */}
+      {/* Unread notifications */}
       {unreadNotifications.length > 0 && (
         <div className="space-y-2">
           {unreadNotifications.map((notif) => (
-            <div
-              key={notif.id}
-              className="flex items-start justify-between gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3"
-            >
+            <div key={notif.id} className="flex items-start justify-between gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3">
               <div className="flex items-start gap-2">
                 <Bell className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
                 <div>
@@ -166,11 +245,7 @@ export default function Monitors() {
                   <p className="text-game-muted text-xs mt-0.5">{formatNotifTime(notif)}</p>
                 </div>
               </div>
-              <button
-                onClick={() => dismissNotification(notif)}
-                className="text-game-muted hover:text-white transition-colors shrink-0"
-                title="Dismiss"
-              >
+              <button onClick={() => dismissNotification(notif)} className="text-game-muted hover:text-white transition-colors shrink-0">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -178,32 +253,28 @@ export default function Monitors() {
         </div>
       )}
 
-      {/* Dual-role warning banner */}
+      {/* Dual-role warning */}
       {dualRoleWarning && (
         <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/40 rounded-xl px-4 py-4">
           <ShieldAlert className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
           <div className="flex-1">
-            <p className="text-amber-300 font-semibold text-sm">Dual-Role Monitor Created</p>
+            <p className="text-amber-300 font-semibold text-sm">Dual-Role Monitor Added</p>
             <p className="text-amber-200/80 text-xs mt-1 leading-relaxed">
-              <strong>{dualRoleWarning.email}</strong> is already registered as an owner in the system.
+              <strong>{dualRoleWarning.email}</strong> is already registered as an owner.
               The password you set is their <strong>monitor access password</strong> for your zone only —
-              their existing owner password and account are completely unaffected.
-              They can change this monitor password from their Settings page at any time.
+              their owner account is unaffected.
             </p>
           </div>
-          <button
-            onClick={() => setDualRoleWarning(null)}
-            className="text-amber-400/60 hover:text-amber-300 transition-colors shrink-0"
-          >
+          <button onClick={() => setDualRoleWarning(null)} className="text-amber-400/60 hover:text-amber-300 transition-colors shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Add monitor button */}
+      {/* Add Monitor button */}
       {!showForm && (
         <Button
-          onClick={() => { setShowForm(true); setDualRoleWarning(null); }}
+          onClick={() => { setShowForm(true); setDualRoleWarning(null); setFormError(''); }}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white"
         >
           <UserPlus className="w-4 h-4" />
@@ -216,11 +287,18 @@ export default function Monitors() {
         <form onSubmit={handleCreate} className="bg-game-surface border border-game-border rounded-2xl p-6 space-y-4">
           <h3 className="text-white font-semibold text-lg">New Monitor Account</h3>
 
+          {formError && (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-red-400 text-sm">
+              <X className="w-4 h-4 shrink-0" />
+              {formError}
+            </div>
+          )}
+
           <div className="space-y-1">
             <label className="text-game-muted text-sm">Display Name</label>
             <Input
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => { setDisplayName(e.target.value); setFormError(''); }}
               placeholder="e.g. John — Evening Shift"
               className="bg-game-bg border-game-border text-white"
               required
@@ -232,7 +310,7 @@ export default function Monitors() {
             <Input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setFormError(''); }}
               placeholder="monitor@example.com"
               className="bg-game-bg border-game-border text-white"
               required
@@ -241,14 +319,14 @@ export default function Monitors() {
 
           <div className="space-y-1">
             <label className="text-game-muted text-sm">
-              Monitor Password
-              <span className="text-game-muted/60 ml-1 text-xs">(they use this to access your zone)</span>
+              Password
+              <span className="text-game-muted/60 ml-1 text-xs">(monitor uses this to log in)</span>
             </label>
             <div className="relative">
               <Input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setFormError(''); }}
                 placeholder="At least 6 characters"
                 className="bg-game-bg border-game-border text-white pr-10"
                 required
@@ -265,12 +343,16 @@ export default function Monitors() {
 
           <div className="flex gap-3 pt-1">
             <Button type="submit" disabled={creating} className="bg-blue-600 hover:bg-blue-500 text-white">
-              {creating ? 'Creating...' : 'Create Monitor'}
+              {creating
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Creating…</>
+                : 'Create Monitor'
+              }
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => { setShowForm(false); setEmail(''); setPassword(''); setDisplayName(''); }}
+              onClick={resetForm}
+              disabled={creating}
               className="border-game-border text-white hover:bg-white/10"
             >
               Cancel
@@ -279,32 +361,30 @@ export default function Monitors() {
         </form>
       )}
 
-      {/* Monitor list */}
-      <div className="space-y-3">
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-          </div>
-        ) : monitors.length === 0 ? (
-          <div className="bg-game-surface border border-game-border rounded-2xl p-8 text-center">
-            <UserCog className="w-10 h-10 text-game-muted mx-auto mb-3" />
-            <p className="text-white font-semibold">No monitors yet</p>
-            <p className="text-game-muted text-sm mt-1">Add your first monitor to give staff access to this zone.</p>
-          </div>
-        ) : (
-          monitors.map((monitor) => (
+      {/* Monitor list — shown directly below the Add button */}
+      {loading ? (
+        <PageSkeleton rows={2} />
+      ) : monitors.length === 0 ? (
+        <div className="bg-game-surface border border-game-border rounded-2xl p-8 text-center">
+          <UserCog className="w-10 h-10 text-game-muted mx-auto mb-3" />
+          <p className="text-white font-semibold">No monitors yet</p>
+          <p className="text-game-muted text-sm mt-1">Add your first monitor to give staff access to this zone.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {monitors.map((monitor) => (
             <div
               key={monitor.id}
               className="bg-game-surface border border-game-border rounded-xl px-5 py-4 flex items-center justify-between gap-4"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-purple-300 text-sm font-bold">
+                <div className="w-10 h-10 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                  <span className="text-purple-300 font-bold text-sm">
                     {(monitor.displayName || monitor.email || '?')[0].toUpperCase()}
                   </span>
                 </div>
                 <div>
-                  <p className="text-white font-medium text-sm">{monitor.displayName || monitor.email}</p>
+                  <p className="text-white font-semibold text-sm">{monitor.displayName || '—'}</p>
                   <p className="text-game-muted text-xs">{monitor.email}</p>
                 </div>
               </div>
@@ -326,9 +406,9 @@ export default function Monitors() {
                 </button>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

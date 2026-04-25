@@ -203,6 +203,42 @@ export const firestoreClient = {
   },
 
   /**
+   * Direct monitor creation (fallback when Cloud Function not deployed).
+   * Writes the monitor record to owners/{ownerId}/users/{monitorUid} and
+   * userIndex/{monitorUid}.
+   */
+  async createMonitorDirect(ownerId, monitorUid, { email, displayName, isExistingOwner }) {
+    const batch = [];
+    // owners/{ownerId}/users/{monitorUid}
+    await setDoc(doc(db, 'owners', ownerId, 'users', monitorUid), {
+      email,
+      displayName,
+      isExistingOwner: isExistingOwner ?? false,
+      createdAt: serverTimestamp(),
+    });
+    // userIndex/{monitorUid} — only for new (non-owner) monitors
+    if (!isExistingOwner) {
+      await setDoc(doc(db, 'userIndex', monitorUid), {
+        ownerId,
+        email,
+        role: 'monitor',
+        createdAt: serverTimestamp(),
+      });
+    }
+  },
+
+  /**
+   * Direct monitor deletion (fallback when Cloud Function not deployed).
+   * Removes the monitor record and userIndex entry.
+   */
+  async deleteMonitorDirect(ownerId, monitorUid) {
+    await deleteDoc(doc(db, 'owners', ownerId, 'users', monitorUid));
+    try {
+      await deleteDoc(doc(db, 'userIndex', monitorUid));
+    } catch { /* may not exist */ }
+  },
+
+  /**
    * Lists notifications for an owner, ordered newest first.
    */
   async listNotifications(ownerId) {
