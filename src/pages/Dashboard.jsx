@@ -165,7 +165,7 @@ export default function Dashboard() {
             <p className={"text-2xl font-bold " + color}>{value}</p>
           </div>
         ))}
-        <RoleGuard role="admin">
+        <RoleGuard role="owner">
           <div className={"rounded-xl border p-4 " + earningsStat.bg}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-game-muted text-xs font-medium">{t(earningsStat.labelKey)}</span>
@@ -177,7 +177,7 @@ export default function Dashboard() {
       </div>
 
       {/* P&L cards */}
-      <RoleGuard role="admin">
+      <RoleGuard role="owner">
         <div data-tour="pnl-cards" className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-game-surface border border-game-border rounded-xl p-5">
             <h3 className="text-white font-semibold mb-3 flex items-center gap-2">

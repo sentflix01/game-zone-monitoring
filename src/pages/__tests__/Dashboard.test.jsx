@@ -1,5 +1,3 @@
-// Feature: auth-and-roles, Property 9: Dashboard financial content visibility matches role
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
@@ -92,7 +90,7 @@ beforeEach(() => {
 });
 
 function renderDashboard(role) {
-  useAuth.mockReturnValue({ role });
+  useAuth.mockReturnValue({ role, ownerId: 'test-owner-id' });
   return render(
     <MemoryRouter>
       <Dashboard />
@@ -100,22 +98,18 @@ function renderDashboard(role) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Property 9: Dashboard financial content visibility matches role
-// Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5
-// ─────────────────────────────────────────────────────────────────────────────
 describe('Property 9: Dashboard financial content visibility matches role', () => {
   it('shows/hides financial content based on role across 100 runs', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.oneof(fc.constant('admin'), fc.constant('user')),
+        fc.oneof(fc.constant('owner'), fc.constant('monitor')),
         async (role) => {
           const { container, unmount } = renderDashboard(role);
 
           // Wait for async data loading
           await new Promise((resolve) => setTimeout(resolve, 0));
 
-          if (role === 'user') {
+          if (role === 'monitor') {
             expect(container.querySelector('[data-tour="pnl-cards"]')).toBeNull();
             expect(container.textContent).not.toContain('dashboard.stat.todayEarnings');
           } else {
@@ -137,49 +131,46 @@ describe('Property 9: Dashboard financial content visibility matches role', () =
   }, 30000);
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Unit tests
-// ─────────────────────────────────────────────────────────────────────────────
 describe('Dashboard financial content unit tests', () => {
-  it('user: P&L cards absent, todayEarnings absent', async () => {
-    const { container } = renderDashboard('user');
+  it('monitor: P&L cards absent, todayEarnings absent', async () => {
+    const { container } = renderDashboard('monitor');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.querySelector('[data-tour="pnl-cards"]')).toBeNull();
     expect(container.textContent).not.toContain('dashboard.stat.todayEarnings');
   });
 
-  it('admin: P&L cards present, todayEarnings present', async () => {
-    const { container } = renderDashboard('admin');
+  it('owner: P&L cards present, todayEarnings present', async () => {
+    const { container } = renderDashboard('owner');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.querySelector('[data-tour="pnl-cards"]')).not.toBeNull();
     expect(container.textContent).toContain('dashboard.stat.todayEarnings');
   });
 
-  it('user: available, inUse, activeSessions stats always present', async () => {
-    const { container } = renderDashboard('user');
+  it('monitor: available, inUse, activeSessions stats always present', async () => {
+    const { container } = renderDashboard('monitor');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).toContain('dashboard.stat.available');
     expect(container.textContent).toContain('dashboard.stat.inUse');
     expect(container.textContent).toContain('dashboard.stat.activeSessions');
   });
 
-  it('admin: available, inUse, activeSessions stats always present', async () => {
-    const { container } = renderDashboard('admin');
+  it('owner: available, inUse, activeSessions stats always present', async () => {
+    const { container } = renderDashboard('owner');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).toContain('dashboard.stat.available');
     expect(container.textContent).toContain('dashboard.stat.inUse');
     expect(container.textContent).toContain('dashboard.stat.activeSessions');
   });
 
-  it('user: manage expenses and full analytics links absent', async () => {
-    const { container } = renderDashboard('user');
+  it('monitor: manage expenses and full analytics links absent', async () => {
+    const { container } = renderDashboard('monitor');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).not.toContain('dashboard.pnl.manageExpenses');
     expect(container.textContent).not.toContain('dashboard.pnl.fullAnalytics');
   });
 
-  it('admin: manage expenses and full analytics links present', async () => {
-    const { container } = renderDashboard('admin');
+  it('owner: manage expenses and full analytics links present', async () => {
+    const { container } = renderDashboard('owner');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).toContain('dashboard.pnl.manageExpenses');
     expect(container.textContent).toContain('dashboard.pnl.fullAnalytics');

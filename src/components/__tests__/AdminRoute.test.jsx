@@ -41,7 +41,7 @@ describe('Property 7: Admin-only routes redirect regular users', () => {
     fc.assert(
       fc.property(
         fc.constantFrom('/analytics', '/expenses'),
-        fc.oneof(fc.constant('admin'), fc.constant('user')),
+        fc.oneof(fc.constant('owner'), fc.constant('monitor')),
         (path, role) => {
           useAuth.mockReturnValue({
             isAuthenticated: true,
@@ -60,13 +60,13 @@ describe('Property 7: Admin-only routes redirect regular users', () => {
             </MemoryRouter>
           );
 
-          if (role === 'user') {
+          if (role === 'monitor') {
             // Should redirect to dashboard and fire toast
             expect(getByTestId('dashboard')).toBeTruthy();
             expect(queryByTestId('admin-content')).toBeNull();
             expect(toast.error).toHaveBeenCalledWith('auth.error.accessDenied');
           } else {
-            // admin: should render protected content
+            // owner: should render protected content
             expect(getByTestId('admin-content')).toBeTruthy();
             expect(queryByTestId('dashboard')).toBeNull();
             expect(toast.error).not.toHaveBeenCalled();
@@ -124,8 +124,8 @@ describe('AdminRoute unit tests', () => {
     expect(getByTestId('login-page')).toBeTruthy();
   });
 
-  it('redirects user role to / and fires toast.error', () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, isLoadingAuth: false, role: 'user' });
+  it('redirects monitor role to / and fires toast.error', () => {
+    useAuth.mockReturnValue({ isAuthenticated: true, isLoadingAuth: false, role: 'monitor' });
 
     const { getByTestId, queryByTestId } = render(
       <MemoryRouter initialEntries={['/analytics']}>
@@ -143,8 +143,8 @@ describe('AdminRoute unit tests', () => {
     expect(toast.error).toHaveBeenCalledWith('auth.error.accessDenied');
   });
 
-  it('renders outlet for admin role', () => {
-    useAuth.mockReturnValue({ isAuthenticated: true, isLoadingAuth: false, role: 'admin' });
+  it('renders outlet for owner role', () => {
+    useAuth.mockReturnValue({ isAuthenticated: true, isLoadingAuth: false, role: 'owner' });
 
     const { getByTestId } = render(
       <MemoryRouter initialEntries={['/analytics']}>

@@ -23,7 +23,7 @@ describe('storageAdapter native fallback', () => {
     }));
     Preferences.get.mockRejectedValueOnce(new Error('plugin missing'));
 
-    const consoles = await storageAdapter.entities.Console.list();
+    const consoles = await storageAdapter.entities.Console.list('test-owner');
 
     expect(consoles).toEqual([{ id: 'console-1', name: 'PS5 #1' }]);
     expect(Preferences.get).toHaveBeenCalledWith({ key: 'gamezone_db' });
@@ -33,7 +33,7 @@ describe('storageAdapter native fallback', () => {
     Preferences.get.mockResolvedValueOnce({ value: null });
     Preferences.set.mockRejectedValueOnce(new Error('plugin missing'));
 
-    const created = await storageAdapter.entities.Console.create({ name: 'PS5 #2', status: 'available' });
+    const created = await storageAdapter.entities.Console.create('test-owner', { name: 'PS5 #2', status: 'available' });
     const persisted = JSON.parse(localStorage.getItem('gamezone_db'));
 
     expect(created.name).toBe('PS5 #2');

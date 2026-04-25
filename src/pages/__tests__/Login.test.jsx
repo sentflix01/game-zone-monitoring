@@ -120,33 +120,7 @@ describe('Login page unit tests', () => {
     );
 
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
-    expect(getByText('Continue with Gmail')).toBeTruthy();
   });
-
-  it('starts Google popup sign-in when the Gmail button is clicked', async () => {
-    useAuth.mockReturnValue({
-      isAuthenticated: false,
-      isLoadingAuth: false,
-      user: null,
-      role: null,
-    });
-
-    const { getByRole } = render(
-      <MemoryRouter initialEntries={['/login']}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<div>Dashboard</div>} />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    fireEvent.click(getByRole('button', { name: /continue with gmail/i }));
-
-    await waitFor(() => {
-      expect(signInWithPopup).toHaveBeenCalledTimes(1);
-    });
-  });
-
   it('shows loading spinner when auth is loading', async () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,

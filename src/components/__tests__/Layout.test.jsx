@@ -1,5 +1,3 @@
-// Feature: auth-and-roles, Property 10: Navigation items rendered match the user's role
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
@@ -37,18 +35,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Property 10: Navigation items rendered match the user's role
-// Validates: Requirements 8.1, 8.2
-// ─────────────────────────────────────────────────────────────────────────────
 describe("Property 10: Navigation items rendered match the user's role", () => {
-  it('admin sees 8 nav items, user sees 6 nav items', () => {
+  it('owner sees 9 nav items, monitor sees 6 nav items', () => {
     fc.assert(
       fc.property(
-        fc.oneof(fc.constant('admin'), fc.constant('user')),
+        fc.oneof(fc.constant('owner'), fc.constant('monitor')),
         (role) => {
           useAuth.mockReturnValue({ role, logout: vi.fn() });
-
 
           const { container, unmount } = render(
             <MemoryRouter>
@@ -59,13 +52,14 @@ describe("Property 10: Navigation items rendered match the user's role", () => {
           const sidebar = container.querySelector('aside');
           const navLinks = sidebar ? sidebar.querySelectorAll('a[href]') : [];
 
-          if (role === 'admin') {
-            expect(navLinks.length).toBe(8);
+          if (role === 'owner') {
+            expect(navLinks.length).toBe(9);
           } else {
             expect(navLinks.length).toBe(6);
             const hrefs = Array.from(navLinks).map(a => a.getAttribute('href'));
             expect(hrefs).not.toContain('/expenses');
             expect(hrefs).not.toContain('/analytics');
+            expect(hrefs).not.toContain('/monitors');
           }
 
           unmount();
@@ -77,12 +71,9 @@ describe("Property 10: Navigation items rendered match the user's role", () => {
   }, 30000);
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Unit tests
-// ─────────────────────────────────────────────────────────────────────────────
 describe('Layout nav filtering unit tests', () => {
-  it('admin sees all 8 nav items including expenses and analytics', () => {
-    useAuth.mockReturnValue({ role: 'admin', logout: vi.fn() });
+  it('owner sees all 9 nav items including expenses, analytics, and monitors', () => {
+    useAuth.mockReturnValue({ role: 'owner', logout: vi.fn() });
 
     const { container } = render(
       <MemoryRouter>
@@ -94,13 +85,14 @@ describe('Layout nav filtering unit tests', () => {
     const links = sidebar.querySelectorAll('a[href]');
     const hrefs = Array.from(links).map(a => a.getAttribute('href'));
 
-    expect(links.length).toBe(8);
+    expect(links.length).toBe(9);
     expect(hrefs).toContain('/expenses');
     expect(hrefs).toContain('/analytics');
+    expect(hrefs).toContain('/monitors');
   });
 
-  it('user sees 6 nav items without expenses and analytics', () => {
-    useAuth.mockReturnValue({ role: 'user', logout: vi.fn() });
+  it('monitor sees 6 nav items without owner-only pages', () => {
+    useAuth.mockReturnValue({ role: 'monitor', logout: vi.fn() });
 
     const { container } = render(
       <MemoryRouter>
@@ -115,10 +107,11 @@ describe('Layout nav filtering unit tests', () => {
     expect(links.length).toBe(6);
     expect(hrefs).not.toContain('/expenses');
     expect(hrefs).not.toContain('/analytics');
+    expect(hrefs).not.toContain('/monitors');
   });
 
   it('renders logout button in header', () => {
-    useAuth.mockReturnValue({ role: 'user', logout: vi.fn() });
+    useAuth.mockReturnValue({ role: 'monitor', logout: vi.fn() });
 
     const { getByText } = render(
       <MemoryRouter>
@@ -131,7 +124,7 @@ describe('Layout nav filtering unit tests', () => {
 
   it('calls logout when logout button is clicked', () => {
     const mockLogout = vi.fn();
-    useAuth.mockReturnValue({ role: 'admin', logout: mockLogout });
+    useAuth.mockReturnValue({ role: 'owner', logout: mockLogout });
 
     const { getByText } = render(
       <MemoryRouter>
