@@ -18,6 +18,7 @@ import Players from './pages/Players';
 import Expenses from './pages/Expenses';
 import Analytics from './pages/Analytics';
 import Monitors from './pages/Monitors';
+import LinkedInCallback from './pages/LinkedInCallback';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron === true;
 const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
@@ -30,6 +31,7 @@ function AppRoutes() {
     <TourProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/linkedin/callback" element={<LinkedInCallback />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
