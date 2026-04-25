@@ -1,9 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -15,58 +12,6 @@ import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
-const GOOGLE_AUTH_SCOPES = ['profile', 'email'];
-let nativeGoogleAuthInitPromise = null;
-
-async function getNativeGoogleAuth() {
-  const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
-
-  if (!nativeGoogleAuthInitPromise) {
-    nativeGoogleAuthInitPromise = Promise.resolve(
-      GoogleAuth.initialize({
-        scopes: GOOGLE_AUTH_SCOPES,
-        grantOfflineAccess: true,
-      })
-    ).catch((error) => {
-      nativeGoogleAuthInitPromise = null;
-      throw error;
-    });
-  }
-
-  await nativeGoogleAuthInitPromise;
-  return GoogleAuth;
-}
-
-function isGoogleSignInCancelled(error) {
-  const details = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
-  return (
-    error?.code === 'auth/popup-closed-by-user' ||
-    error?.code === '12501' ||
-    details.includes('popup-closed-by-user') ||
-    details.includes('canceled the sign-in flow')
-  );
-}
-
-function getNativeGoogleErrorMessage(error) {
-  const details = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
-
-  if (
-    details.includes('plugin') ||
-    details.includes('not implemented') ||
-    details.includes('googleauth') ||
-    details.includes('google auth')
-  ) {
-    return 'Google sign-in is unavailable in this Android build. Sync and rebuild the native app, or use email/password for now.';
-  }
-
-  if (details.includes('id token')) {
-    return 'Google sign-in did not return an ID token. Check the native Google auth setup.';
-  }
-
-  return null;
-}
-
 function getErrorMessage(code) {
   switch (code) {
     case 'auth/invalid-email': return 'Invalid email address.';
@@ -77,24 +22,8 @@ function getErrorMessage(code) {
     case 'auth/weak-password': return 'Password must be at least 6 characters.';
     case 'auth/too-many-requests': return 'Too many attempts. Try again later.';
     case 'auth/network-request-failed': return 'Network error. Check your connection.';
-    case 'auth/popup-closed-by-user': return null;
-    case 'auth/popup-blocked': return 'Popup was blocked. Please allow popups.';
-    case 'auth/unauthorized-domain': return 'Domain not authorized. Contact support.';
     default: return null;
   }
-}
-
-function GmailIcon() {
-  return (
-    <svg viewBox="0 0 48 48" width="22" height="22">
-      <path fill="#EA4335" d="M6 40h6V22.5L4 17v20c0 1.66 1.34 3 2 3z" />
-      <path fill="#34A853" d="M36 40h6c1.66 0 3-1.34 3-3V17l-9 5.5z" />
-      <path fill="#4285F4" d="M36 10l-12 7.5L12 10H6l18 11 18-11z" />
-      <path fill="#FBBC05" d="M6 17l6 5.5V40h24V22.5L42 17V8L24 19 6 8z" />
-      <path fill="#EA4335" d="M6 8v9l6 5.5V10z" />
-      <path fill="#34A853" d="M42 8v9l-6 5.5V10z" />
-    </svg>
-  );
 }
 
 export default function Login() {
@@ -106,17 +35,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [gmailLoading, setGmailLoading] = useState(false);
-
-  useEffect(() => {
-    if (!isCapacitor) return;
-
-    void getNativeGoogleAuth().catch((error) => {
-      console.error('Native GoogleAuth initialization failed:', error);
-    });
-  }, []);
-
-
 
   if (isLoadingAuth) {
     return (
@@ -138,60 +56,10 @@ export default function Login() {
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
-      // Don't navigate() here — let onAuthStateChanged fire in AuthContext.
-      // The `if (isAuthenticated) return <Navigate to="/" replace />` below
-      // will redirect once the auth state propagates, avoiding the race where
-      // ProtectedRoute sees isAuthenticated=false and bounces back to /login.
     } catch (err) {
       const msg = getErrorMessage(err.code) || 'Sign in failed. Please try again.';
       toast.error(msg);
       setLoading(false);
-    }
-    // Keep loading=true until AuthContext confirms the user — the redirect
-    // will happen automatically, and loading state clears if there is an error.
-  }
-
-  async function handleGmailLogin() {
-    if (!auth) {
-      toast.error('Authentication is not configured in this build.');
-      return;
-    }
-
-    setGmailLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-
-      if (isCapacitor) {
-        // Android/iOS — use native Capacitor Google Auth plugin
-        const GoogleAuth = await getNativeGoogleAuth();
-        const googleUser = await GoogleAuth.signIn();
-        const idToken = googleUser?.authentication?.idToken || googleUser?.idToken;
-
-        if (!idToken) {
-          throw new Error('Google sign-in completed without an ID token.');
-        }
-
-        const credential = GoogleAuthProvider.credential(idToken);
-        await signInWithCredential(auth, credential);
-        // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
-      } else {
-        // Web: use popup for immediate feedback
-        await signInWithPopup(auth, provider);
-        // Let AuthContext / Navigate handle the redirect (avoids ProtectedRoute race)
-      }
-    } catch (err) {
-      if (!isGoogleSignInCancelled(err)) {
-        const msg =
-          (isCapacitor ? getNativeGoogleErrorMessage(err) : null) ||
-          getErrorMessage(err.code) ||
-          err?.message ||
-          'Gmail sign-in failed. Please use email/password.';
-        toast.error(msg);
-      }
-    } finally {
-      // If we triggered redirect, the page will reload; harmless if it doesn't.
-      setGmailLoading(false);
     }
   }
 
@@ -221,26 +89,6 @@ export default function Login() {
       </div>
 
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6 space-y-5">
-
-        {/* Gmail popup button */}
-        <button
-          type="button"
-          onClick={handleGmailLogin}
-          disabled={gmailLoading || loading}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm transition-all disabled:opacity-50 shadow-sm"
-        >
-          <GmailIcon />
-          <span className="flex-1 text-center text-gray-800 font-semibold">
-            {gmailLoading ? 'Opening Google...' : 'Continue with Gmail'}
-          </span>
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-game-border" />
-          <span className="text-game-muted text-xs">or sign in with email</span>
-          <div className="flex-1 h-px bg-game-border" />
-        </div>
-
         <form onSubmit={handleEmailPassword} className="space-y-3">
           <Input
             type="email"
@@ -248,7 +96,7 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             required
-            disabled={loading || gmailLoading}
+            disabled={loading}
             className="bg-game-bg border-game-border text-white"
             autoComplete="email"
           />
@@ -259,7 +107,7 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               required
-              disabled={loading || gmailLoading}
+              disabled={loading}
               className="bg-game-bg border-game-border text-white pr-10"
               autoComplete={isRegister ? 'new-password' : 'current-password'}
             />
@@ -273,7 +121,7 @@ export default function Login() {
           </div>
           <Button
             type="submit"
-            disabled={loading || gmailLoading}
+            disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-500 text-white"
           >
             {loading ? 'Please wait...' : (isRegister ? 'Create Account' : 'Sign In')}
@@ -284,7 +132,7 @@ export default function Login() {
           <button
             type="button"
             onClick={handleForgotPassword}
-            disabled={loading || gmailLoading}
+            disabled={loading}
             className="w-full text-center text-game-muted text-xs hover:text-white transition-colors disabled:opacity-50"
           >
             Forgot password?
@@ -302,4 +150,3 @@ export default function Login() {
     </div>
   );
 }
-
