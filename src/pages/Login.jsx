@@ -45,11 +45,11 @@ function errMsg(code) {
   return map[code] ?? null;
 }
 
-/* ─── Inline error banner ────────────────────────────────────────────────── */
+/* ─── Inline error banner — only renders when there is an actual error ──── */
 function ErrorBanner({ message }) {
   if (!message) return null;
   return (
-    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm">
+    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5 text-red-400 text-sm animate-in fade-in duration-200">
       <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
       <span>{message}</span>
     </div>
@@ -85,17 +85,20 @@ export default function Login() {
   const [error, setError]             = useState('');   // inline error message
 
   // Handle redirect result on mount (popup-blocked fallback)
+  // Only runs when a redirect was actually pending — avoids spurious errors on fresh loads
   useEffect(() => {
     if (!auth?.onAuthStateChanged) return;
     const pending = sessionStorage.getItem('__redirectPending') === '1';
-    if (pending) setRedirecting(true);
+    if (!pending) return; // no redirect was initiated — skip entirely
+
+    setRedirecting(true);
     getRedirectResult(auth)
       .then(r => { if (r?.user) toast.success('Signed in successfully!'); })
       .catch(e => {
-        if (e.code !== 'auth/no-auth-event') {
-          const msg = errMsg(e.code) || e.message;
-          if (msg) setError(msg);
-        }
+        // Only show errors that are meaningful to the user
+        const msg = errMsg(e.code);
+        if (msg) setError(msg);
+        // Silently ignore internal Firebase codes (no-auth-event, etc.)
       })
       .finally(() => {
         sessionStorage.removeItem('__redirectPending');
@@ -122,10 +125,15 @@ export default function Login() {
     setLoadingBtn('google');
     try {
       await googleSignIn();
-      // On success AuthContext navigates — no action needed
+      // On success AuthContext navigates — no action needed here
     } catch (e) {
-      const msg = errMsg(e.code) || e.message || 'Google sign-in failed. Please try again.';
-      if (msg) setError(msg);
+      // Don't show error if user just closed the popup
+      if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+        setLoadingBtn(null);
+        return;
+      }
+      const msg = errMsg(e.code) || 'Google sign-in failed. Please try again.';
+      setError(msg);
     } finally {
       setLoadingBtn(null);
     }
@@ -137,33 +145,40 @@ export default function Login() {
     if (!email.trim() || !password) return;
     setError('');
     setLoadingBtn('email');
+
+    let ownerError = null;
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
+      return; // success — AuthContext handles navigation
     } catch (err) {
-      const isCredentialError = [
-        'auth/wrong-password',
-        'auth/invalid-credential',
-        'auth/user-not-found',
-      ].includes(err.code);
+      ownerError = err;
+    }
 
-      if (isCredentialError) {
-        // Fallback: try monitor sign-in via Cloud Function
-        try {
-          const monitorSignIn = httpsCallable(functions, 'monitorSignIn');
-          const result = await monitorSignIn({ email: email.trim(), password });
-          await signInWithCustomToken(auth, result.data.token);
-          // AuthContext resolves role from custom token claims
-        } catch {
-          // Both paths failed — show a clear error
-          setError('Incorrect email or password. Please try again.');
-          setLoadingBtn(null);
-        }
-      } else {
-        const msg = errMsg(err.code) || 'Sign in failed. Please try again.';
-        setError(msg);
+    const isCredentialError = [
+      'auth/wrong-password',
+      'auth/invalid-credential',
+      'auth/user-not-found',
+    ].includes(ownerError.code);
+
+    if (isCredentialError && functions) {
+      // Fallback: try monitor sign-in via Cloud Function
+      try {
+        const monitorSignIn = httpsCallable(functions, 'monitorSignIn');
+        const result = await monitorSignIn({ email: email.trim(), password });
+        await signInWithCustomToken(auth, result.data.token);
+        return; // success — AuthContext handles navigation
+      } catch {
+        // Both paths failed
+        setError('Incorrect email or password. Please try again.');
         setLoadingBtn(null);
+        return;
       }
     }
+
+    // Non-credential error (network, disabled account, etc.)
+    const msg = errMsg(ownerError.code) || 'Sign in failed. Please try again.';
+    setError(msg);
+    setLoadingBtn(null);
   }
 
   /* ── Registration ── */

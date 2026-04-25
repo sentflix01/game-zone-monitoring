@@ -118,6 +118,28 @@ describe('Login page unit tests', () => {
     expect(getByPlaceholderText('you@example.com')).toBeTruthy();
     expect(getByText('Continue with Google')).toBeTruthy();
   });
+
+  it('shows no error banner on clean load', () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoadingAuth: false,
+      user: null,
+      role: null,
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // No error banner should be visible on initial render
+    expect(container.querySelector('[class*="bg-red-500"]')).toBeNull();
+  });
+
   it('shows loading spinner when auth is loading', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
