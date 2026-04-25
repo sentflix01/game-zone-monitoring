@@ -1,7 +1,7 @@
 // Feature: auth-and-roles, Property 2: Authenticated users are redirected away from Login
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import React from 'react';
 import * as fc from 'fast-check';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -51,7 +51,6 @@ vi.mock('sonner', () => ({
 }));
 
 import { useAuth } from '@/lib/AuthContext';
-import { signInWithPopup } from 'firebase/auth';
 import Login from '../Login';
 
 beforeEach(() => {
