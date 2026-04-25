@@ -11,6 +11,7 @@ export default {
   'nav.expenses': 'Expenses',
   'nav.analytics': 'Analytics',
   'nav.report': 'Report',
+  'nav.monitors': 'Monitors',
   'nav.settings': 'Settings',
 
   // ── Language toggle ────────────────────────────────────────────────────────

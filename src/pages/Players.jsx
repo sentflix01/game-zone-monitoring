@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { storageAdapter } from "@/api/storageAdapter";
 import { useTranslation } from "@/i18n/I18nContext";
 import { Trophy, Clock, DollarSign, Monitor, User } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Players() {
   const { t } = useTranslation();
+  const { ownerId } = useAuth();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -12,33 +14,27 @@ export default function Players() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!ownerId) return;
 
     const load = async () => {
       try {
         const [p, s] = await Promise.all([
-          storageAdapter.entities.Player.list("-total_spend"),
-          storageAdapter.entities.Session.list("-created_date", 500),
+          storageAdapter.entities.Player.list(ownerId, "-total_spend"),
+          storageAdapter.entities.Session.list(ownerId, "-created_date", 500),
         ]);
-
         if (cancelled) return;
-
         setPlayers(p);
         setSessions(s);
       } catch (error) {
         console.error("Players failed to load:", error);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
     void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [ownerId]);
 
   const playerSessions = selected
     ? sessions.filter(

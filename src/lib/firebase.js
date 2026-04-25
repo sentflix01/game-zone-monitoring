@@ -1,5 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, initializeAuth, browserLocalPersistence } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,6 +21,8 @@ const stub = {
 };
 
 let auth = stub;
+let db = null;
+let functions = null;
 
 const missing = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID']
   .filter((k) => !import.meta.env[k]);
@@ -27,13 +31,13 @@ if (missing.length === 0) {
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
+    // Firestore & Functions
+    db = getFirestore(app);
+    functions = getFunctions(app);
+
     if (isCapacitor) {
-      // Avoid IndexedDB on Android WebView because auth initialization can
-      // stall there and leave the app behind a loading spinner.
       try {
-        auth = initializeAuth(app, {
-          persistence: browserLocalPersistence,
-        });
+        auth = initializeAuth(app, { persistence: browserLocalPersistence });
       } catch (e) {
         auth = getAuth(app);
       }
@@ -41,14 +45,15 @@ if (missing.length === 0) {
       auth = getAuth(app);
     }
   } catch (err) {
-    // If initializeAuth already called, fall back to getAuth
     try {
       const app = getApps()[0];
       auth = getAuth(app);
+      db = getFirestore(app);
+      functions = getFunctions(app);
     } catch (e) {
       console.error('[firebase] init failed:', e.message);
     }
   }
 }
 
-export { auth };
+export { auth, db, functions };

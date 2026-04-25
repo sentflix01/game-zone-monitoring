@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import RoleGuard from "@/components/RoleGuard";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { subDays } from "date-fns";
+import { useAuth } from "@/lib/AuthContext";
 
 const chartStyle = { backgroundColor: "hsl(222 47% 8%)", border: "1px solid hsl(222 30% 14%)", borderRadius: "8px", color: "#fff" };
 
@@ -21,6 +22,7 @@ function safeMatchMedia(query) {
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const { ownerId } = useAuth();
   const [consoles, setConsoles] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -51,13 +53,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!ownerId) return;
 
     const load = async () => {
       try {
         const [c, s, e] = await Promise.all([
-          storageAdapter.entities.Console.list(),
-          storageAdapter.entities.Session.list("-created_date", 500),
-          storageAdapter.entities.Expense.list("-date"),
+          storageAdapter.entities.Console.list(ownerId),
+          storageAdapter.entities.Session.list(ownerId, "-created_date", 500),
+          storageAdapter.entities.Expense.list(ownerId, "-date"),
         ]);
 
         if (cancelled) return;
@@ -79,7 +82,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ownerId]);
 
   const today = new Date().toDateString();
   const todayISO = new Date().toISOString().slice(0, 10);

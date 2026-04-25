@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useTranslation } from "@/i18n/I18nContext";
 import RoleGuard from "@/components/RoleGuard";
+import { useAuth } from "@/lib/AuthContext";
 
 function formatDuration(secs) {
   const h = Math.floor(secs / 3600);
@@ -36,6 +37,7 @@ async function sendWelcomeSMS(phone, consoleName) {
 
 export default function Consoles() {
   const { t } = useTranslation();
+  const { ownerId } = useAuth();
   const [consoles, setConsoles] = useState([]);
   const [pricing, setPricing] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,10 +50,11 @@ export default function Consoles() {
   const [startForm, setStartForm] = useState({ playerName: "", phone: "" });
 
   const load = async () => {
+    if (!ownerId) return;
     try {
       const [c, p] = await Promise.all([
-        storageAdapter.entities.Console.list(),
-        storageAdapter.entities.Pricing.list(),
+        storageAdapter.entities.Console.list(ownerId),
+        storageAdapter.entities.Pricing.list(ownerId),
       ]);
       setConsoles(c);
       setPricing(p);
@@ -64,7 +67,7 @@ export default function Consoles() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [ownerId]);
 
   useEffect(() => {
     tickRef.current = setInterval(() => {
@@ -103,9 +106,9 @@ export default function Consoles() {
   const save = async () => {
     if (!form.name) return toast.error("Console name is required");
     if (editing) {
-      await storageAdapter.entities.Console.update(editing.id, form);
+      await storageAdapter.entities.Console.update(ownerId, editing.id, form);
     } else {
-      await storageAdapter.entities.Console.create(form);
+      await storageAdapter.entities.Console.create(ownerId, form);
     }
     toast.success(editing ? "Console updated" : "Console added");
     setDialogOpen(false);
@@ -118,7 +121,7 @@ export default function Consoles() {
       toast.error("Cannot delete a console with an active session");
       return;
     }
-    await storageAdapter.entities.Console.delete(id);
+    await storageAdapter.entities.Console.delete(ownerId, id);
     toast.success("Console removed");
     load();
   };
@@ -151,8 +154,8 @@ export default function Consoles() {
     const name = startForm.playerName.trim();
     const phone = startForm.phone.trim();
 
-    await storageAdapter.entities.Console.update(c.id, { status: "occupied" });
-    await storageAdapter.entities.Session.create({
+    await storageAdapter.entities.Console.update(ownerId, c.id, { status: "occupied" });
+    await storageAdapter.entities.Session.create(ownerId, {
       console_id: c.id,
       console_name: c.name,
       console_type: c.type,
@@ -211,10 +214,10 @@ export default function Consoles() {
       wastedCost,
     };
 
-    const activeSessions = await storageAdapter.entities.Session.filter({ status: "active" });
+    const activeSessions = await storageAdapter.entities.Session.filter(ownerId, { status: "active" });
     const active = activeSessions.find((s) => s.console_id === c.id);
     if (active) {
-      await storageAdapter.entities.Session.update(active.id, {
+      await storageAdapter.entities.Session.update(ownerId, active.id, {
         end_time: new Date().toISOString(),
         duration_minutes: Math.floor(secs / 60),
         amount_charged: price,
@@ -223,7 +226,7 @@ export default function Consoles() {
         status: "completed",
       });
     }
-    await storageAdapter.entities.Console.update(c.id, { status: "available" });
+    await storageAdapter.entities.Console.update(ownerId, c.id, { status: "available" });
 
     setConsoleState((prev) => ({
       ...prev,
@@ -249,8 +252,8 @@ export default function Consoles() {
       ? cs.sessionRows[0].name
       : "Player";
 
-    storageAdapter.entities.Console.update(c.id, { status: "occupied" });
-    storageAdapter.entities.Session.create({
+    storageAdapter.entities.Console.update(ownerId, c.id, { status: "occupied" });
+    storageAdapter.entities.Session.create(ownerId, {
       console_id: c.id,
       console_name: c.name,
       console_type: c.type,

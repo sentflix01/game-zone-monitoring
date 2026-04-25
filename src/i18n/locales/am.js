@@ -11,6 +11,7 @@ export default {
   'nav.expenses': 'ወጪዎች',
   'nav.analytics': 'ትንታኔ',
   'nav.report': 'ሪፖርት',
+  'nav.monitors': 'ተቆጣጣሪዎች',
   'nav.settings': 'ቅንብሮች',
 
   // ── Language toggle ────────────────────────────────────────────────────────

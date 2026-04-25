@@ -1,12 +1,11 @@
 /**
- * Platform-aware storage adapter.
- * - On Capacitor native: uses @capacitor/preferences, serializing the full DB
- *   to/from a single JSON value under the 'gamezone_db' key.
- * - On web/Electron: delegates directly to localClient (localStorage).
+ * Platform-aware storage adapter — multi-tenant edition.
+ * - Web/Electron: Firestore (cloud, ownerId-scoped)
+ * - Capacitor native: local Preferences storage (offline-first)
  */
 
 import { Preferences } from '@capacitor/preferences';
-import { localClient } from './localClient';
+import { firestoreClient } from './firestoreClient';
 
 const DB_KEY = 'gamezone_db';
 const COLLECTIONS = ['Console', 'Session', 'Pricing', 'Player', 'Expense'];
@@ -16,28 +15,15 @@ function isNative() {
 }
 
 function createEmptyDb() {
-  return {
-    Console: [],
-    Session: [],
-    Pricing: [],
-    Player: [],
-    Expense: [],
-  };
+  return { Console: [], Session: [], Pricing: [], Player: [], Expense: [] };
 }
 
 function normalizeDb(db) {
   const normalized = createEmptyDb();
-
-  if (!db || typeof db !== 'object') {
-    return normalized;
+  if (!db || typeof db !== 'object') return normalized;
+  for (const col of COLLECTIONS) {
+    if (Array.isArray(db[col])) normalized[col] = db[col];
   }
-
-  for (const collection of COLLECTIONS) {
-    if (Array.isArray(db[collection])) {
-      normalized[collection] = db[collection];
-    }
-  }
-
   return normalized;
 }
 
@@ -45,33 +31,17 @@ function readLocalFallbackDb() {
   try {
     const raw = localStorage.getItem(DB_KEY);
     return raw ? normalizeDb(JSON.parse(raw)) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function saveLocalFallbackDb(db) {
-  try {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-    return true;
-  } catch {
-    return false;
-  }
+  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return true; } catch { return false; }
 }
 
 async function saveNativeDb(db) {
-  try {
-    await Preferences.set({ key: DB_KEY, value: JSON.stringify(db) });
-    return true;
-  } catch {
-    return false;
-  }
+  try { await Preferences.set({ key: DB_KEY, value: JSON.stringify(db) }); return true; } catch { return false; }
 }
 
-/**
- * Wraps a promise with a timeout. If the promise doesn’t resolve within
- * `ms` milliseconds, rejects with a timeout error.
- */
 function withTimeout(promise, ms, label) {
   return new Promise((resolve, reject) => {
     const id = setTimeout(() => reject(new Error(`storageAdapter: ${label} timed out after ${ms}ms`)), ms);
@@ -82,40 +52,27 @@ function withTimeout(promise, ms, label) {
   });
 }
 
-async function getDb() {
+async function getNativeDb() {
   const fallbackDb = readLocalFallbackDb();
-
   try {
-    const { value } = await withTimeout(
-      Preferences.get({ key: DB_KEY }),
-      5000,
-      'Preferences.get'
-    );
+    const { value } = await withTimeout(Preferences.get({ key: DB_KEY }), 5000, 'Preferences.get');
     if (value) {
       const nativeDb = normalizeDb(JSON.parse(value));
       saveLocalFallbackDb(nativeDb);
       return nativeDb;
     }
   } catch (err) {
-    if (fallbackDb) {
-      return fallbackDb;
-    }
+    if (fallbackDb) return fallbackDb;
     console.error(`storageAdapter: failed to read native database — ${err.message}`);
   }
-
-  if (fallbackDb) {
-    await saveNativeDb(fallbackDb);
-    return fallbackDb;
-  }
-
+  if (fallbackDb) { await saveNativeDb(fallbackDb); return fallbackDb; }
   return createEmptyDb();
 }
 
-async function saveDb(db) {
+async function saveNativeDbFull(db) {
   const normalizedDb = normalizeDb(db);
   const savedLocally = saveLocalFallbackDb(normalizedDb);
   const savedNatively = await saveNativeDb(normalizedDb);
-
   if (!savedLocally && !savedNatively) {
     return Promise.reject(new Error('storageAdapter: failed to persist database'));
   }
@@ -126,13 +83,12 @@ function generateId() {
 }
 
 // ---------------------------------------------------------------------------
-// Capacitor entity implementation (mirrors localClient API)
+// Capacitor (native) entity — uses local Preferences, no ownerId needed
 // ---------------------------------------------------------------------------
-
 function makeCapacitorEntity(collection) {
   return {
-    async list(sortField, limit) {
-      const db = await getDb();
+    async list(_ownerId, sortField, limit) {
+      const db = await getNativeDb();
       let items = [...(db[collection] || [])];
       if (sortField) {
         const desc = sortField.startsWith('-');
@@ -146,75 +102,55 @@ function makeCapacitorEntity(collection) {
       if (limit) items = items.slice(0, limit);
       return items;
     },
-
-    async filter(query) {
-      const db = await getDb();
+    async filter(_ownerId, query) {
+      const db = await getNativeDb();
       return (db[collection] || []).filter((item) =>
         Object.entries(query).every(([k, v]) => item[k] === v)
       );
     },
-
-    async get(id) {
-      const db = await getDb();
+    async get(_ownerId, id) {
+      const db = await getNativeDb();
       return (db[collection] || []).find((i) => i.id === id) || null;
     },
-
-    async create(data) {
-      const db = await getDb();
+    async create(_ownerId, data) {
+      const db = await getNativeDb();
       if (!db[collection]) db[collection] = [];
       const item = { ...data, id: generateId(), created_date: new Date().toISOString() };
       db[collection].push(item);
-      await saveDb(db);
+      await saveNativeDbFull(db);
       return item;
     },
-
-    async update(id, data) {
-      const db = await getDb();
+    async update(_ownerId, id, data) {
+      const db = await getNativeDb();
       const idx = (db[collection] || []).findIndex((i) => i.id === id);
       if (idx === -1) return Promise.reject(new Error(`storageAdapter: ${collection} ${id} not found`));
       db[collection][idx] = { ...db[collection][idx], ...data };
-      await saveDb(db);
+      await saveNativeDbFull(db);
       return db[collection][idx];
     },
-
-    async delete(id) {
-      const db = await getDb();
+    async delete(_ownerId, id) {
+      const db = await getNativeDb();
       db[collection] = (db[collection] || []).filter((i) => i.id !== id);
-      await saveDb(db);
+      await saveNativeDbFull(db);
     },
   };
 }
 
 // ---------------------------------------------------------------------------
-// Exported adapter — picks backend at call time so tests can control the env
+// Adapter — routes to Firestore (web) or Capacitor local (native)
+// All methods now accept ownerId as the first argument.
 // ---------------------------------------------------------------------------
-
 function makeAdapterEntity(collection) {
+  const native = makeCapacitorEntity(collection);
+  const cloud  = firestoreClient.entities[collection];
+
   return {
-    list(sortField, limit) {
-      if (isNative()) return makeCapacitorEntity(collection).list(sortField, limit);
-      return localClient.entities[collection].list(sortField, limit);
-    },
-    filter(query) {
-      if (isNative()) return makeCapacitorEntity(collection).filter(query);
-      return localClient.entities[collection].filter(query);
-    },
-    get(id) {
-      if (isNative()) return makeCapacitorEntity(collection).get(id);
-      return localClient.entities[collection].get(id);
-    },
-    create(data) {
-      if (isNative()) return makeCapacitorEntity(collection).create(data);
-      return localClient.entities[collection].create(data);
-    },
-    update(id, data) {
-      if (isNative()) return makeCapacitorEntity(collection).update(id, data);
-      return localClient.entities[collection].update(id, data);
-    },
-    delete(id) {
-      if (isNative()) return makeCapacitorEntity(collection).delete(id);
-      return localClient.entities[collection].delete(id);
-    },
+    list   (ownerId, sortField, limit) { return isNative() ? native.list(ownerId, sortField, limit)   : cloud.list(ownerId, sortField, limit); },
+    filter (ownerId, query)            { return isNative() ? native.filter(ownerId, query)             : cloud.filter(ownerId, query); },
+    get    (ownerId, id)               { return isNative() ? native.get(ownerId, id)                   : cloud.get(ownerId, id); },
+    create (ownerId, data)             { return isNative() ? native.create(ownerId, data)              : cloud.create(ownerId, data); },
+    update (ownerId, id, data)         { return isNative() ? native.update(ownerId, id, data)          : cloud.update(ownerId, id, data); },
+    delete (ownerId, id)               { return isNative() ? native.delete(ownerId, id)                : cloud.delete(ownerId, id); },
   };
 }
 
@@ -223,7 +159,7 @@ export const storageAdapter = {
     Console: makeAdapterEntity('Console'),
     Session: makeAdapterEntity('Session'),
     Pricing: makeAdapterEntity('Pricing'),
-    Player: makeAdapterEntity('Player'),
+    Player:  makeAdapterEntity('Player'),
     Expense: makeAdapterEntity('Expense'),
   },
 };

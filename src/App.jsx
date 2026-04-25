@@ -17,13 +17,12 @@ import Report from './pages/Report.jsx';
 import Players from './pages/Players';
 import Expenses from './pages/Expenses';
 import Analytics from './pages/Analytics';
+import Monitors from './pages/Monitors';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron === true;
 const isCapacitor = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;
 const Router = (isElectron || isCapacitor) ? HashRouter : BrowserRouter;
 
-// TourProvider must be inside Router (needs useNavigate/useLocation)
-// but outside the Routes so it renders on every page
 import { TourProvider } from '@/contexts/TourContext';
 
 function AppRoutes() {
@@ -37,11 +36,13 @@ function AppRoutes() {
             <Route path="/consoles" element={<Consoles />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/players" element={<Players />} />
-            <Route path="/settings" element={<Settings />} />
             <Route path="/report" element={<Report />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* Owner-only routes */}
             <Route element={<AdminRoute />}>
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/monitors" element={<Monitors />} />
             </Route>
           </Route>
         </Route>

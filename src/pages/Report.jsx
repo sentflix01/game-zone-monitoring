@@ -8,35 +8,33 @@ import {
 } from "recharts";
 import { subDays, format } from "date-fns";
 import { useTranslation } from "@/i18n/I18nContext";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Report() {
   const { t } = useTranslation();
+  const { ownerId } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    if (!ownerId) return;
 
     const load = async () => {
       try {
-        const s = await storageAdapter.entities.Session.list("-created_date", 1000);
+        const s = await storageAdapter.entities.Session.list(ownerId, "-created_date", 1000);
         if (cancelled) return;
         setSessions(s);
       } catch (error) {
         console.error("Report failed to load:", error);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
     void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [ownerId]);
 
   const today = new Date().toDateString();
   const todaySessions = sessions.filter(

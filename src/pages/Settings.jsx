@@ -13,7 +13,7 @@ import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 
 export default function Settings() {
   const { t } = useTranslation();
   const { restartTour } = useTour();
-  const { setRole, user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [promoteUid, setPromoteUid] = useState("");
   const [pricing, setPricing] = useState([]);
   const [rates, setRates] = useState({ PS5: "", PS4: "" });
@@ -28,10 +28,11 @@ export default function Settings() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!ownerId) return;
 
     const load = async () => {
       try {
-        const p = await storageAdapter.entities.Pricing.list();
+        const p = await storageAdapter.entities.Pricing.list(ownerId);
         if (cancelled) return;
 
         setPricing(p);
@@ -43,27 +44,22 @@ export default function Settings() {
       } catch (error) {
         console.error("Settings failed to load:", error);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
     void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [ownerId]);
 
   const save = async () => {
     for (const type of ["PS5", "PS4"]) {
       const existing = pricing.find((p) => p.console_type === type);
       const data = { console_type: type, hourly_rate: parseFloat(rates[type]) || 0, game_time_minutes: parseFloat(gameTimes[type]) || 0, currency };
       if (existing) {
-        await storageAdapter.entities.Pricing.update(existing.id, data);
+        await storageAdapter.entities.Pricing.update(ownerId, existing.id, data);
       } else {
-        await storageAdapter.entities.Pricing.create(data);
+        await storageAdapter.entities.Pricing.create(ownerId, data);
       }
     }
     toast.success(t('settings.toast.saved'));
@@ -227,26 +223,13 @@ export default function Settings() {
         </div>
       </div>
 
-      <RoleGuard role="admin">
-        <div className="bg-game-surface border border-game-border rounded-xl p-6 space-y-4">
-          <h3 className="text-white font-semibold">{t('auth.settings.promoteTitle')}</h3>
-          <div>
-            <label className="text-game-muted text-sm mb-1.5 block">{t('auth.settings.promoteLabel')}</label>
-            <Input
-              value={promoteUid}
-              onChange={(e) => setPromoteUid(e.target.value)}
-              placeholder="User UID"
-              className="bg-game-bg border-game-border text-white"
-            />
-          </div>
-          <Button
-            onClick={() => { if (promoteUid.trim()) { setRole(promoteUid.trim(), 'admin'); toast.success(t('auth.settings.promoteButton')); setPromoteUid(''); } }}
-            className="bg-purple-600 hover:bg-purple-500 text-white"
-          >
-            {t('auth.settings.promoteButton')}
-          </Button>
-        </div>
-      </RoleGuard>
+      <div className="bg-game-surface border border-game-border rounded-xl p-6 space-y-4">
+        <h3 className="text-white font-semibold">Your Account</h3>
+        <p className="text-game-muted text-xs">
+          Signed in as <span className="text-white font-medium">{user?.email}</span>.
+          You are an <span className="text-blue-400 font-semibold">Owner</span> — you have full access to all data and can manage monitors.
+        </p>
+      </div>
 
       <div data-tour="restart-tour" className="bg-game-surface border border-game-border rounded-xl p-6 space-y-3">
         <h3 className="text-white font-semibold">{t('settings.tour.title')}</h3>

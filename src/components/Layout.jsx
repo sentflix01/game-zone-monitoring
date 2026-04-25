@@ -1,28 +1,30 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import InstallPWA from "./InstallPWA";
 import LanguageToggle from "./LanguageToggle";
-import { LayoutDashboard, Monitor, Clock, Settings, BarChart2, Users, Receipt, TrendingUp, LogOut } from "lucide-react";
+import { LayoutDashboard, Monitor, Clock, Settings, BarChart2, Users, Receipt, TrendingUp, LogOut, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/I18nContext";
 import { useAuth } from "@/lib/AuthContext";
 
 const navDefs = [
-  { path: "/",          key: "nav.dashboard", icon: LayoutDashboard, adminOnly: false },
-  { path: "/consoles",  key: "nav.consoles",  icon: Monitor,         adminOnly: false },
-  { path: "/sessions",  key: "nav.sessions",  icon: Clock,           adminOnly: false },
-  { path: "/players",   key: "nav.players",   icon: Users,           adminOnly: false },
-  { path: "/expenses",  key: "nav.expenses",  icon: Receipt,         adminOnly: true  },
-  { path: "/analytics", key: "nav.analytics", icon: TrendingUp,      adminOnly: true  },
-  { path: "/report",    key: "nav.report",    icon: BarChart2,       adminOnly: false },
-  { path: "/settings",  key: "nav.settings",  icon: Settings,        adminOnly: false },
+  { path: "/",          key: "nav.dashboard", icon: LayoutDashboard, ownerOnly: false },
+  { path: "/consoles",  key: "nav.consoles",  icon: Monitor,         ownerOnly: false },
+  { path: "/sessions",  key: "nav.sessions",  icon: Clock,           ownerOnly: false },
+  { path: "/players",   key: "nav.players",   icon: Users,           ownerOnly: false },
+  { path: "/expenses",  key: "nav.expenses",  icon: Receipt,         ownerOnly: true  },
+  { path: "/analytics", key: "nav.analytics", icon: TrendingUp,      ownerOnly: true  },
+  { path: "/report",    key: "nav.report",    icon: BarChart2,       ownerOnly: false },
+  { path: "/monitors",  key: "nav.monitors",  icon: UserCog,         ownerOnly: true  },
+  { path: "/settings",  key: "nav.settings",  icon: Settings,        ownerOnly: false },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const { t } = useTranslation();
-  const { role, logout } = useAuth();
+  const { role, logout, user } = useAuth();
 
-  const visibleNav = role === 'admin' ? navDefs : navDefs.filter(n => !n.adminOnly);
+  const isOwner = role === 'owner';
+  const visibleNav = isOwner ? navDefs : navDefs.filter(n => !n.ownerOnly);
 
   return (
     <div className="min-h-screen bg-game-bg flex flex-col">
@@ -33,7 +35,18 @@ export default function Layout() {
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-white font-bold text-lg leading-none">{t('app.name')}</h1>
-          <p className="text-game-muted text-xs">{t('app.subtitle')}</p>
+          <p className="text-game-muted text-xs">
+            {user?.email}
+            {' '}
+            <span className={cn(
+              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-1",
+              isOwner
+                ? "bg-blue-600/30 text-blue-300"
+                : "bg-purple-600/30 text-purple-300"
+            )}>
+              {isOwner ? 'Owner' : 'Monitor'}
+            </span>
+          </p>
         </div>
         <LanguageToggle />
         <button

@@ -1,74 +1,90 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { firestoreClient } from '@/api/firestoreClient';
 
 const AuthContext = createContext();
 
-const ROLE_KEY = 'gamezone_user_role';
-
-function getStoredRoleForUser(uid) {
-  let storedRole = localStorage.getItem(ROLE_KEY);
-  if (!storedRole) {
-    const ADMIN_UIDS = import.meta.env.VITE_ADMIN_UIDS
-      ? import.meta.env.VITE_ADMIN_UIDS.split(',').map((s) => s.trim())
-      : [];
-    storedRole = ADMIN_UIDS.includes(uid) ? 'admin' : 'user';
-    localStorage.setItem(ROLE_KEY, storedRole);
-  }
-  return storedRole;
-}
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [role, setRoleState] = useState(null);
+  const [user, setUser]                   = useState(null);
+  const [role, setRoleState]              = useState(null);   // 'owner' | 'monitor'
+  const [ownerId, setOwnerId]             = useState(null);   // the owner's UID (same as uid if owner)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [authError, setAuthError] = useState(null);
+  const [authError, setAuthError]         = useState(null);
 
   useEffect(() => {
-    // If auth is missing, avoid blocking the UI behind a spinner.
     if (!auth) {
       setIsLoadingAuth(false);
       return;
     }
 
-    // Fast-path: if we already have a current user (common right after login),
-    // don't block the UI waiting for the listener.
-    if (auth.currentUser) {
-      const storedRole = getStoredRoleForUser(auth.currentUser.uid);
-      setUser(auth.currentUser);
-      setRoleState(storedRole);
-      setIsAuthenticated(true);
-      setIsLoadingAuth(false);
-    }
-
-    // Safety timeout — if onAuthStateChanged never fires (e.g. IndexedDB hang
-    // on Android WebView), stop the spinner after 5 seconds.
+    // Safety timeout — stop spinner if auth never fires (Android WebView edge case)
     const timeout = setTimeout(() => {
       setAuthError('Auth initialization timeout');
       setIsLoadingAuth(false);
-    }, 5000);
+    }, 8000);
 
     let unsubscribe = () => {};
 
+    async function resolveUser(firebaseUser) {
+      clearTimeout(timeout);
+      setAuthError(null);
+
+      if (!firebaseUser) {
+        setUser(null);
+        setRoleState(null);
+        setOwnerId(null);
+        setIsAuthenticated(false);
+        setIsLoadingAuth(false);
+        return;
+      }
+
+      try {
+        // Check if this uid belongs to a monitor (has a userIndex entry)
+        const monitorOwnerId = await firestoreClient.getMonitorOwner(firebaseUser.uid);
+
+        if (monitorOwnerId) {
+          // This user is a MONITOR — scoped to their owner's data
+          setUser(firebaseUser);
+          setRoleState('monitor');
+          setOwnerId(monitorOwnerId);
+          setIsAuthenticated(true);
+        } else {
+          // This user is an OWNER — ensure their owner doc exists (first login)
+          const exists = await firestoreClient.ownerExists(firebaseUser.uid);
+          if (!exists) {
+            await firestoreClient.createOwner(firebaseUser.uid, {
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || '',
+            });
+          }
+          setUser(firebaseUser);
+          setRoleState('owner');
+          setOwnerId(firebaseUser.uid);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        console.error('[AuthContext] resolveUser failed:', err);
+        // Fallback: treat as owner using their own uid
+        setUser(firebaseUser);
+        setRoleState('owner');
+        setOwnerId(firebaseUser.uid);
+        setIsAuthenticated(true);
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    }
+
     try {
+      // Fast-path: if a current user is already known, resolve immediately
+      if (auth.currentUser) {
+        resolveUser(auth.currentUser);
+      }
+
       unsubscribe = onAuthStateChanged(
         auth,
-        (firebaseUser) => {
-          clearTimeout(timeout);
-          setAuthError(null);
-          if (firebaseUser) {
-            const storedRole = getStoredRoleForUser(firebaseUser.uid);
-            setUser(firebaseUser);
-            setRoleState(storedRole);
-            setIsAuthenticated(true);
-          } else {
-            setUser(null);
-            setRoleState(null);
-            setIsAuthenticated(false);
-          }
-          setIsLoadingAuth(false);
-        },
+        (firebaseUser) => resolveUser(firebaseUser),
         (error) => {
           clearTimeout(timeout);
           setAuthError(error?.message || 'Auth state listener failed');
@@ -93,30 +109,22 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       setAuthError(error?.message || 'Failed to sign out');
     } finally {
-      localStorage.removeItem(ROLE_KEY);
       setUser(null);
       setRoleState(null);
+      setOwnerId(null);
       setIsAuthenticated(false);
     }
-  };
-
-  const setRole = (uid, newRole) => {
-    if (newRole !== 'admin' && newRole !== 'user') {
-      throw new Error(`Invalid role: ${newRole}. Must be 'admin' or 'user'.`);
-    }
-    localStorage.setItem(ROLE_KEY, newRole);
-    setRoleState(newRole);
   };
 
   return (
     <AuthContext.Provider value={{
       user,
-      role,
+      role,       // 'owner' | 'monitor'
+      ownerId,    // always the owner's uid — used to scope all data queries
       isAuthenticated,
       isLoadingAuth,
       authError,
       logout,
-      setRole,
     }}>
       {children}
     </AuthContext.Provider>

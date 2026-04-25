@@ -19,7 +19,8 @@ export default function AdminRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (role !== 'admin') {
+  // Only owners (admins) can access admin routes
+  if (role !== 'owner') {
     toast.error(t('auth.error.accessDenied'));
     return <Navigate to="/" replace />;
   }

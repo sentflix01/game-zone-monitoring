@@ -5,12 +5,14 @@ import { Download, TrendingUp, DollarSign, Receipt, Monitor } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, subMonths } from "date-fns";
+import { useAuth } from "@/lib/AuthContext";
 
 const CATEGORY_COLORS = { snacks: "#eab308", repairs: "#ef4444", utilities: "#3b82f6", rent: "#a855f7", salaries: "#22c55e", other: "#6b7280" };
 const chartStyle = { backgroundColor: "hsl(222 47% 8%)", border: "1px solid hsl(222 30% 14%)", borderRadius: "8px", color: "#fff" };
 
 export default function Analytics() {
   const { t } = useTranslation();
+  const { ownerId } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,33 +20,27 @@ export default function Analytics() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!ownerId) return;
 
     const load = async () => {
       try {
         const [s, e] = await Promise.all([
-          storageAdapter.entities.Session.list("-created_date", 2000),
-          storageAdapter.entities.Expense.list("-date"),
+          storageAdapter.entities.Session.list(ownerId, "-created_date", 2000),
+          storageAdapter.entities.Expense.list(ownerId, "-date"),
         ]);
-
         if (cancelled) return;
-
         setSessions(s);
         setExpenses(e);
       } catch (error) {
         console.error("Analytics failed to load:", error);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
     void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [ownerId]);
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const d = subMonths(new Date(), i);

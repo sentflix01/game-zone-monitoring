@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { storageAdapter } from "@/api/storageAdapter";
+import { useAuth } from "@/lib/AuthContext";
 import { useTranslation } from "@/i18n/I18nContext";
 import { Plus, Trash2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,13 +17,15 @@ const CATEGORY_COLORS = {
 
 export default function Expenses() {
   const { t } = useTranslation();
+  const { ownerId } = useAuth();
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ description: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10) });
 
   const load = async () => {
+    if (!ownerId) return;
     try {
-      const e = await storageAdapter.entities.Expense.list("-date");
+      const e = await storageAdapter.entities.Expense.list(ownerId, "-date");
       setExpenses(e);
     } catch (error) {
       console.error("Expenses failed to load:", error);
@@ -33,18 +36,18 @@ export default function Expenses() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [ownerId]);
 
   const add = async () => {
     if (!form.amount || isNaN(parseFloat(form.amount))) return toast.error(t('expenses.toast.invalidAmount'));
-    await storageAdapter.entities.Expense.create({ ...form, amount: parseFloat(parseFloat(form.amount).toFixed(2)) });
+    await storageAdapter.entities.Expense.create(ownerId, { ...form, amount: parseFloat(parseFloat(form.amount).toFixed(2)) });
     toast.success(t('expenses.toast.added'));
     setForm({ description: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10) });
     load();
   };
 
   const remove = async (id) => {
-    await storageAdapter.entities.Expense.delete(id);
+    await storageAdapter.entities.Expense.delete(ownerId, id);
     toast.success(t('expenses.toast.removed')); load();
   };
 
