@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { auth } from '@/lib/firebase';
-import { Eye, EyeOff, ArrowLeft, Phone } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
