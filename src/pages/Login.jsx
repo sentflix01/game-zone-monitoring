@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   GoogleAuthProvider,
   GithubAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -19,7 +21,7 @@ import { Input } from '@/components/ui/input';
 
 const LINKEDIN_CLIENT_ID = import.meta.env.VITE_LINKEDIN_CLIENT_ID || '';
 
-/* ─── Brand Icon Components ─────────────────────────────────────────────── */
+/* ─── Brand Icons ────────────────────────────────────────────────────────── */
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20">
@@ -55,21 +57,26 @@ function WhatsAppIcon() {
   );
 }
 
+/* ─── Error message mapping ──────────────────────────────────────────────── */
 function getErrorMessage(code) {
   switch (code) {
-    case 'auth/invalid-email': return 'Invalid email address.';
-    case 'auth/user-not-found': return 'No account found with this email.';
+    case 'auth/invalid-email':             return 'Invalid email address.';
+    case 'auth/user-not-found':            return 'No account found with this email.';
     case 'auth/wrong-password':
-    case 'auth/invalid-credential': return 'Incorrect email or password.';
-    case 'auth/email-already-in-use': return 'An account with this email already exists.';
-    case 'auth/weak-password': return 'Password must be at least 6 characters.';
-    case 'auth/too-many-requests': return 'Too many attempts. Try again later.';
-    case 'auth/network-request-failed': return 'Network error. Check your connection.';
-    case 'auth/popup-closed-by-user': return null;
-    case 'auth/popup-blocked': return 'Popup was blocked. Please allow popups.';
-    case 'auth/invalid-phone-number': return 'Invalid phone number. Use international format e.g. +251911000000.';
+    case 'auth/invalid-credential':        return 'Incorrect email or password.';
+    case 'auth/email-already-in-use':      return 'An account with this email already exists.';
+    case 'auth/weak-password':             return 'Password must be at least 6 characters.';
+    case 'auth/too-many-requests':         return 'Too many attempts. Try again later.';
+    case 'auth/network-request-failed':    return 'Network error. Check your connection.';
+    case 'auth/popup-closed-by-user':      return null;
+    case 'auth/popup-blocked':             return null; // handled by redirect fallback
+    case 'auth/operation-not-allowed':     return 'This sign-in method is not enabled. Please enable it in the Firebase Console.';
+    case 'auth/unauthorized-domain':       return 'This domain is not authorized. Add it in Firebase Console → Authentication → Settings → Authorized domains.';
+    case 'auth/invalid-phone-number':      return 'Invalid phone number. Use international format e.g. +251911000000.';
     case 'auth/invalid-verification-code': return 'Invalid OTP code. Please try again.';
-    case 'auth/code-expired': return 'OTP code expired. Please request a new one.';
+    case 'auth/code-expired':              return 'OTP code expired. Please request a new one.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with a different sign-in method for this email.';
     default: return null;
   }
 }
@@ -81,12 +88,26 @@ function SocialBtn({ onClick, disabled, loading, icon, label, bgClass }) {
       type="button"
       onClick={onClick}
       disabled={disabled || loading}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-white transition-all duration-200 disabled:opacity-50 hover:brightness-110 active:scale-[0.98] ${bgClass}`}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm text-white transition-all duration-200 disabled:opacity-50 hover:brightness-110 active:scale-[0.98] shadow-sm ${bgClass}`}
     >
       <span className="shrink-0">{icon}</span>
       <span className="flex-1 text-center">{loading ? 'Connecting…' : label}</span>
     </button>
   );
+}
+
+/* ─── Helper: try popup, fall back to redirect ───────────────────────────── */
+async function signInWithPopupOrRedirect(provider) {
+  try {
+    return await signInWithPopup(auth, provider);
+  } catch (err) {
+    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+      // Fallback: full-page redirect (no popup required)
+      await signInWithRedirect(auth, provider);
+      return null; // page will navigate away
+    }
+    throw err;
+  }
 }
 
 /* ─── Main Login Component ───────────────────────────────────────────────── */
@@ -99,11 +120,12 @@ export default function Login() {
   const [isRegister, setIsRegister]     = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
 
-  const [googleLoading, setGoogleLoading]   = useState(false);
-  const [githubLoading, setGithubLoading]   = useState(false);
+  const [googleLoading,   setGoogleLoading]   = useState(false);
+  const [githubLoading,   setGithubLoading]   = useState(false);
   const [linkedinLoading, setLinkedinLoading] = useState(false);
+  const [redirectLoading, setRedirectLoading] = useState(false);
 
-  // Phone / WhatsApp state
+  // Phone / WhatsApp
   const [phoneMode, setPhoneMode]               = useState(false);
   const [phone, setPhone]                       = useState('');
   const [otp, setOtp]                           = useState('');
@@ -112,9 +134,29 @@ export default function Login() {
   const [confirmationResult, setConfirmationResult] = useState(null);
   const recaptchaVerifierRef = useRef(null);
 
-  const anyLoading = emailLoading || googleLoading || githubLoading || linkedinLoading || phoneLoading;
+  // Handle redirect result when returning from signInWithRedirect
+  useEffect(() => {
+    if (!auth || typeof auth.onAuthStateChanged !== 'function') return;
+    setRedirectLoading(true);
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          // AuthContext onAuthStateChanged will pick this up and redirect
+          toast.success('Signed in successfully!');
+        }
+      })
+      .catch((err) => {
+        if (err.code !== 'auth/no-auth-event') {
+          const msg = getErrorMessage(err.code) || err.message || 'Sign-in failed.';
+          toast.error(msg);
+        }
+      })
+      .finally(() => setRedirectLoading(false));
+  }, []);
 
-  if (isLoadingAuth) {
+  const anyLoading = emailLoading || googleLoading || githubLoading || linkedinLoading || phoneLoading || redirectLoading;
+
+  if (isLoadingAuth || redirectLoading) {
     return (
       <div className="min-h-screen bg-game-bg flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
@@ -157,11 +199,10 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+      await signInWithPopupOrRedirect(provider);
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        toast.error(getErrorMessage(err.code) || 'Google sign-in failed.');
-      }
+      const msg = getErrorMessage(err.code) || err.message || 'Google sign-in failed.';
+      toast.error(msg);
     } finally { setGoogleLoading(false); }
   }
 
@@ -170,18 +211,18 @@ export default function Login() {
     setGithubLoading(true);
     try {
       const provider = new GithubAuthProvider();
-      await signInWithPopup(auth, provider);
+      provider.addScope('user:email');
+      await signInWithPopupOrRedirect(provider);
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        toast.error(getErrorMessage(err.code) || 'GitHub sign-in failed.');
-      }
+      const msg = getErrorMessage(err.code) || err.message || 'GitHub sign-in failed.';
+      toast.error(msg);
     } finally { setGithubLoading(false); }
   }
 
   /* ── LinkedIn (OAuth2 redirect) ─── */
   function handleLinkedInLogin() {
     if (!LINKEDIN_CLIENT_ID) {
-      toast.error('LinkedIn login is not configured yet. Contact the administrator.');
+      toast.error('LinkedIn login is not yet configured. Add VITE_LINKEDIN_CLIENT_ID to your environment.');
       return;
     }
     setLinkedinLoading(true);
@@ -203,25 +244,34 @@ export default function Login() {
     if (!recaptchaVerifierRef.current) {
       recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
+        callback: () => {},
       });
     }
     return recaptchaVerifierRef.current;
   }
 
+  function clearRecaptcha() {
+    try { recaptchaVerifierRef.current?.clear(); } catch {}
+    recaptchaVerifierRef.current = null;
+  }
+
   async function handleSendOTP() {
     const trimmedPhone = phone.trim();
-    if (!trimmedPhone) { toast.error('Enter your phone number in international format, e.g. +251911000000'); return; }
+    if (!trimmedPhone) {
+      toast.error('Enter your phone number in international format, e.g. +251911000000');
+      return;
+    }
     setPhoneLoading(true);
     try {
       const verifier = ensureRecaptcha();
       const result = await signInWithPhoneNumber(auth, trimmedPhone, verifier);
       setConfirmationResult(result);
       setOtpSent(true);
-      toast.success('OTP sent! Check your SMS or WhatsApp.');
+      toast.success('OTP sent! Check your SMS.');
     } catch (err) {
-      recaptchaVerifierRef.current?.clear();
-      recaptchaVerifierRef.current = null;
-      toast.error(getErrorMessage(err.code) || 'Failed to send OTP. Check the phone number and try again.');
+      clearRecaptcha();
+      const msg = getErrorMessage(err.code) || err.message || 'Failed to send OTP. Check the phone number.';
+      toast.error(msg);
     } finally { setPhoneLoading(false); }
   }
 
@@ -230,8 +280,10 @@ export default function Login() {
     setPhoneLoading(true);
     try {
       await confirmationResult.confirm(otp.trim());
+      // AuthContext onAuthStateChanged handles redirect
     } catch (err) {
-      toast.error(getErrorMessage(err.code) || 'OTP verification failed.');
+      const msg = getErrorMessage(err.code) || err.message || 'OTP verification failed.';
+      toast.error(msg);
       setPhoneLoading(false);
     }
   }
@@ -253,11 +305,11 @@ export default function Login() {
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-6 space-y-4 shadow-xl">
 
         {phoneMode ? (
-          /* ── Phone / WhatsApp flow ── */
+          /* ─── Phone / WhatsApp flow ─── */
           <div className="space-y-4">
             <button
               type="button"
-              onClick={() => { setPhoneMode(false); setOtpSent(false); setPhone(''); setOtp(''); }}
+              onClick={() => { setPhoneMode(false); setOtpSent(false); setPhone(''); setOtp(''); clearRecaptcha(); }}
               className="flex items-center gap-2 text-game-muted hover:text-white text-sm transition-colors"
             >
               <ArrowLeft className="w-4 h-4" /> Back to sign in
@@ -265,7 +317,7 @@ export default function Login() {
 
             {!otpSent ? (
               <>
-                <p className="text-game-muted text-xs">Enter your WhatsApp / phone number in international format:</p>
+                <p className="text-game-muted text-xs">Enter your phone number in international format:</p>
                 <Input
                   type="tel"
                   value={phone}
@@ -281,12 +333,14 @@ export default function Login() {
                   disabled={phoneLoading}
                   className="w-full bg-green-600 hover:bg-green-500 text-white"
                 >
-                  {phoneLoading ? 'Sending…' : 'Send OTP'}
+                  {phoneLoading ? 'Sending…' : 'Send OTP via SMS'}
                 </Button>
               </>
             ) : (
               <>
-                <p className="text-game-muted text-xs">Enter the 6-digit code sent to <span className="text-white font-medium">{phone}</span>:</p>
+                <p className="text-game-muted text-xs">
+                  Enter the 6-digit code sent to <span className="text-white font-medium">{phone}</span>:
+                </p>
                 <Input
                   type="text"
                   inputMode="numeric"
@@ -308,7 +362,8 @@ export default function Login() {
                 </Button>
                 <button
                   type="button"
-                  onClick={() => { setOtpSent(false); setOtp(''); }}
+                  onClick={() => { setOtpSent(false); setOtp(''); clearRecaptcha(); }}
+                  disabled={phoneLoading}
                   className="w-full text-center text-game-muted text-xs hover:text-white transition-colors"
                 >
                   Resend OTP
@@ -317,7 +372,7 @@ export default function Login() {
             )}
           </div>
         ) : (
-          /* ── Main login flow ── */
+          /* ─── Main login flow ─── */
           <>
             {/* Social login buttons */}
             <div className="space-y-3">
@@ -335,7 +390,7 @@ export default function Login() {
                 disabled={anyLoading}
                 icon={<GitHubIcon />}
                 label="Continue with GitHub"
-                bgClass="bg-gray-800 hover:bg-gray-700 border border-gray-600"
+                bgClass="bg-[#24292e] hover:bg-[#3a3f44] border border-gray-600"
               />
               <SocialBtn
                 onClick={handleLinkedInLogin}
@@ -350,7 +405,7 @@ export default function Login() {
                 loading={false}
                 disabled={anyLoading}
                 icon={<WhatsAppIcon />}
-                label="Continue with WhatsApp / Phone"
+                label="Continue with Phone / WhatsApp"
                 bgClass="bg-[#25D366] hover:bg-[#1ebe59]"
               />
             </div>
@@ -358,7 +413,7 @@ export default function Login() {
             {/* Divider */}
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-game-border" />
-              <span className="text-game-muted text-xs">or sign in with email</span>
+              <span className="text-game-muted text-xs">or continue with email</span>
               <div className="flex-1 h-px bg-game-border" />
             </div>
 
@@ -424,7 +479,7 @@ export default function Login() {
         )}
       </div>
 
-      {/* Invisible reCAPTCHA container for phone auth */}
+      {/* Invisible reCAPTCHA anchor for phone auth */}
       <div id="recaptcha-container" />
     </div>
   );
