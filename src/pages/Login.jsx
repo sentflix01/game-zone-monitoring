@@ -34,13 +34,15 @@ function errMsg(code) {
     'auth/email-already-in-use':                     'An account with this email already exists. Try signing in instead.',
     'auth/weak-password':                            'Password must be at least 6 characters.',
     'auth/too-many-requests':                        'Too many failed attempts. Please wait a few minutes and try again.',
-    'auth/operation-not-allowed':                    'This sign-in method is not enabled. Contact the administrator.',
-    'auth/unauthorized-domain':                      'This domain is not authorized for sign-in. Contact the administrator.',
+    'auth/operation-not-allowed':                    'Google sign-in is not enabled. Contact the administrator.',
+    'auth/unauthorized-domain':                      'This domain is not authorized. Contact the administrator.',
     'auth/network-request-failed':                   'Network error. Check your internet connection and try again.',
+    'auth/internal-error':                           'An internal error occurred. Please try again.',
     'auth/account-exists-with-different-credential': 'An account already exists with a different sign-in method for this email.',
-    'auth/popup-closed-by-user':                     null, // user dismissed — no error needed
-    'auth/popup-blocked':                            null, // handled by redirect fallback
+    'auth/popup-closed-by-user':                     null,
+    'auth/popup-blocked':                            null,
     'auth/cancelled-popup-request':                  null,
+    'auth/user-disabled':                            'This account has been disabled. Contact the administrator.',
   };
   return map[code] ?? null;
 }
@@ -125,14 +127,13 @@ export default function Login() {
     setLoadingBtn('google');
     try {
       await googleSignIn();
-      // On success AuthContext navigates — no action needed here
     } catch (e) {
-      // Don't show error if user just closed the popup
       if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
         setLoadingBtn(null);
         return;
       }
-      const msg = errMsg(e.code) || 'Google sign-in failed. Please try again.';
+      // Always show something — never fail silently
+      const msg = errMsg(e.code) || `Sign-in failed (${e.code || 'unknown'}). Please try again.`;
       setError(msg);
     } finally {
       setLoadingBtn(null);

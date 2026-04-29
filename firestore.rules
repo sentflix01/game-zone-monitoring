@@ -3,10 +3,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // userIndex: only the user themselves can read their own entry.
-    // Only written by Cloud Functions (admin SDK bypasses rules).
+    // Owners can write entries for monitors they create (direct fallback path).
+    // Cloud Functions also write here via admin SDK.
     match /userIndex/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false; // Cloud Functions only
+      // Allow any authenticated user to create/update a userIndex entry
+      // (owner creating a monitor entry, or monitor updating their own)
+      allow write: if request.auth != null;
     }
 
     // monitorCredentials: contains bcrypt hashes — server-side only.

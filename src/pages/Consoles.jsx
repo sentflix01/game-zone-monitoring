@@ -12,6 +12,32 @@ import { useAuth } from "@/lib/AuthContext";
 
 import PageSkeleton from "@/components/PageSkeleton";
 
+// ── Persist active session start times so the timer survives navigation ──
+const SESSION_STARTS_KEY = "gamezone_active_starts";
+
+function readActiveStarts() {
+  try {
+    const raw = localStorage.getItem(SESSION_STARTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function writeActiveStarts(starts) {
+  try { localStorage.setItem(SESSION_STARTS_KEY, JSON.stringify(starts)); } catch {}
+}
+
+function clearActiveStart(consoleId) {
+  const starts = readActiveStarts();
+  delete starts[consoleId];
+  writeActiveStarts(starts);
+}
+
+function setActiveStart(consoleId, ts) {
+  const starts = readActiveStarts();
+  starts[consoleId] = ts;
+  writeActiveStarts(starts);
+}
+
 function formatDuration(secs) {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -65,6 +91,7 @@ export default function Consoles() {
       ]);
       setConsoles(c);
       setPricing(p);
+
       // Load current players from localStorage
       const cp = {};
       for (const con of c) {
@@ -74,6 +101,47 @@ export default function Consoles() {
         } catch (_) {}
       }
       setCurrentPlayers(cp);
+
+      // ── Restore active session timers from localStorage ──
+      // This ensures the timer keeps running even after navigating away and back.
+      const savedStarts = readActiveStarts();
+      if (Object.keys(savedStarts).length > 0) {
+        // Cross-check with Firestore: only restore if there's actually an active session
+        try {
+          const activeSessions = await storageAdapter.entities.Session.filter(ownerId, { status: "active" });
+          const activeByConsole = {};
+          for (const s of activeSessions) {
+            activeByConsole[s.console_id] = s;
+          }
+
+          const restoredState = {};
+          for (const [consoleId, startTs] of Object.entries(savedStarts)) {
+            const session = activeByConsole[consoleId];
+            if (session) {
+              // Session is still active — restore the timer using the real start_time
+              const realStart = new Date(session.start_time).getTime();
+              restoredState[consoleId] = {
+                status: "active",
+                activePlayer: session.player_name,
+                activePhone: session.player_phone || null,
+                activeStart: realStart,
+                activeSecs: Math.floor((Date.now() - realStart) / 1000),
+                sessionRows: [],
+                mergedRow: null,
+              };
+              // Update localStorage with the real start time
+              setActiveStart(consoleId, realStart);
+            } else {
+              // No active session in Firestore — clear stale localStorage entry
+              clearActiveStart(consoleId);
+            }
+          }
+
+          if (Object.keys(restoredState).length > 0) {
+            setConsoleState((prev) => ({ ...prev, ...restoredState }));
+          }
+        } catch (_) {}
+      }
     } catch (error) {
       console.error("Consoles failed to load:", error);
     } finally {
@@ -205,6 +273,9 @@ export default function Consoles() {
     } catch (_) {}
     setCurrentPlayers((prev) => ({ ...prev, [c.id]: name }));
 
+    const startTs = Date.now();
+    setActiveStart(c.id, startTs); // persist so timer survives navigation
+
     setConsoleState((prev) => ({
       ...prev,
       [c.id]: {
@@ -212,7 +283,7 @@ export default function Consoles() {
         status: "active",
         activePlayer: name,
         activePhone: phone,
-        activeStart: Date.now(),
+        activeStart: startTs,
         activeSecs: 0,
       },
     }));
@@ -268,6 +339,7 @@ export default function Consoles() {
       });
     }
     await storageAdapter.entities.Console.update(ownerId, c.id, { status: "available" });
+    clearActiveStart(c.id); // remove persisted timer
 
     setConsoleState((prev) => ({
       ...prev,
@@ -305,13 +377,16 @@ export default function Consoles() {
       games: [],
     });
 
+    const addStartTs = Date.now();
+    setActiveStart(c.id, addStartTs);
+
     setConsoleState((prev) => ({
       ...prev,
       [c.id]: {
         ...getCS(c.id),
         status: "active",
         activePlayer: name,
-        activeStart: Date.now(),
+        activeStart: addStartTs,
         activeSecs: 0,
       },
     }));
