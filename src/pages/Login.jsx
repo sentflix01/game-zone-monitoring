@@ -104,7 +104,8 @@ export default function Login() {
           const result = await monitorSignIn({ identifier: identifier.trim(), password });
           await signInWithCustomToken(auth, result.data.token);
           return; // success
-        } catch {
+        } catch (cloudErr) {
+          console.error('[Monitor SignIn Fallback Error]', cloudErr);
           setError('Incorrect credentials. Please try again.');
           setLoadingBtn(false);
           return;
@@ -115,6 +116,7 @@ export default function Login() {
       return;
     }
 
+    console.error('[Login Error]', ownerError.code, ownerError.message, ownerError);
     const msg = errMsg(ownerError.code) || 'Sign in failed. Please try again.';
     setError(msg);
     setLoadingBtn(false);
@@ -141,6 +143,7 @@ export default function Login() {
     try {
       await createUserWithEmailAndPassword(auth, identifier.trim(), password);
     } catch (err) {
+      console.error('[Registration Error]', err.code, err.message, err);
       const msg = errMsg(err.code) || 'Registration failed. Please try again.';
       setError(msg);
       setLoadingBtn(false);
