@@ -102,6 +102,15 @@ npx cap open android   # open in Android Studio
 npx cap open ios       # open in Xcode
 ```
 
+## Cloudflare Pages Deployment
+
+This app is released via Cloudflare Pages only. Remove any Netlify integration before release.
+
+1. Connect your GitHub repo to Cloudflare Pages.
+2. Set the build command to `npm run build`.
+3. Set the output directory to `dist`.
+4. Add Firebase Authorized Domains for your Pages URL.
+
 ## Tests
 
 ```bash
