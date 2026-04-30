@@ -22,11 +22,12 @@ export default function Monitors() {
   const [email, setEmail]               = useState('');
   const [username, setUsername]         = useState('');
   const [phone, setPhone]               = useState('');
-  const [displayName, setDisplayName]   = useState('');
-  const [password, setPassword]         = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [formError, setFormError]       = useState('');
-
+  const [displayName, setDisplayName]       = useState('');
+  const [password, setPassword]             = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword]     = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [formError, setFormError]           = useState('');
   // Dual-role warning
   const [dualRoleWarning, setDualRoleWarning] = useState(null);
 
@@ -66,20 +67,26 @@ export default function Monitors() {
     setUsername('');
     setPhone('');
     setPassword('');
+    setConfirmPassword('');
     setDisplayName('');
     setFormError('');
     setShowForm(false);
     setShowPassword(false);
+    setShowConfirmPwd(false);
   }
 
   async function handleCreate(e) {
     e.preventDefault();
-    if (!password || !displayName.trim()) {
-      setFormError('Display name and password are required.');
+    if (!password || !confirmPassword || !displayName.trim()) {
+      setFormError('Display name, password, and password confirmation are required.');
       return;
     }
     if (!email.trim() && !username.trim() && !phone.trim()) {
       setFormError('Please provide at least one identifier: Email, Username, or Phone.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFormError('Passwords do not match. Please try again.');
       return;
     }
     if (password.length < 6) {
@@ -391,6 +398,29 @@ export default function Monitors() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-game-muted text-sm">
+              Confirm Password
+            </label>
+            <div className="relative">
+              <Input
+                type={showConfirmPwd ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => { setConfirmPassword(e.target.value); setFormError(''); }}
+                placeholder="Confirm password"
+                className="bg-game-bg border-game-border text-white pr-10"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPwd(!showConfirmPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
+              >
+                {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>

@@ -11,12 +11,6 @@ const auth = admin.auth();
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Safe Firestore document key from an email address */
-function emailKey(email) {
-  if (!email) return 'missing_email';
-  return encodeURIComponent(email.toLowerCase().trim());
-}
-
 /** Resolve the ownerId for the calling monitor from userIndex or token claims */
 async function resolveMonitorOwnerId(context) {
   // Custom-token sign-ins carry ownerId in claims
@@ -145,17 +139,7 @@ exports.createMonitor = functions.https.onCall(async (data, context) => {
     });
   }
 
-  // For backward compatibility: if there's an email, write to the old emailKey doc too (so older clients don't break immediately)
-  if (cleanEmail) {
-    const oldCredRef = db.collection("monitorCredentials").doc(emailKey(cleanEmail));
-    const oldCredSnap = await oldCredRef.get();
-    if (oldCredSnap.exists) {
-      const existingOld = (oldCredSnap.data().entries || []).filter((e) => e.ownerId !== ownerId);
-      await oldCredRef.update({ entries: [...existingOld, newEntry] });
-    } else {
-      await oldCredRef.set({ entries: [newEntry] });
-    }
-  }
+
 
   return { success: true, uid: monitorUid, alreadyOwner: isExistingOwner };
 });
@@ -184,13 +168,6 @@ exports.monitorSignIn = functions.https.onCall(async (data) => {
     credsSnap.forEach(doc => {
       entries = entries.concat(doc.data().entries || []);
     });
-  } else {
-    // 2. Fallback to old structure: monitorCredentials keyed by emailKey
-    const oldCredRef = db.collection("monitorCredentials").doc(encodeURIComponent(cleanIdentifier));
-    const oldCredSnap = await oldCredRef.get();
-    if (oldCredSnap.exists) {
-      entries = oldCredSnap.data().entries || [];
-    }
   }
 
   if (entries.length === 0) {
@@ -240,15 +217,9 @@ exports.updateMonitorPassword = functions.https.onCall(async (data, context) => 
   }
   const { email, username, phone, displayName } = monitorDoc.data();
 
-  // Look for credentials in new structure
-  let credRef = db.collection("monitorCredentials").doc(monitorUid);
-  let credSnap = await credRef.get();
-
-  // If not in new structure, try old structure
-  if (!credSnap.exists && email) {
-    credRef = db.collection("monitorCredentials").doc(emailKey(email));
-    credSnap = await credRef.get();
-  }
+  // Look for credentials
+  const credRef = db.collection("monitorCredentials").doc(monitorUid);
+  const credSnap = await credRef.get();
 
   if (!credSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Monitor credentials not found.");
@@ -319,13 +290,8 @@ exports.updateMonitorEmail = functions.https.onCall(async (data, context) => {
   const { email: oldEmail } = monitorDoc.data();
 
   // Verify current password
-  let oldCredRef = db.collection("monitorCredentials").doc(monitorUid);
-  let oldCredSnap = await oldCredRef.get();
-  
-  if (!oldCredSnap.exists && oldEmail) {
-    oldCredRef = db.collection("monitorCredentials").doc(emailKey(oldEmail));
-    oldCredSnap = await oldCredRef.get();
-  }
+  const oldCredRef = db.collection("monitorCredentials").doc(monitorUid);
+  const oldCredSnap = await oldCredRef.get();
 
   if (!oldCredSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Monitor credentials not found.");
@@ -422,15 +388,8 @@ exports.deleteMonitor = functions.https.onCall(async (data, context) => {
   const { email, isExistingOwner } = monitorDoc.data();
 
   // ── 1. Update monitorCredentials — remove this owner's entry ──
-  // Check new structure first
-  let credRef = db.collection("monitorCredentials").doc(monitorUid);
-  let credSnap = await credRef.get();
-
-  // Fallback to old structure
-  if (!credSnap.exists && email) {
-    credRef = db.collection("monitorCredentials").doc(emailKey(email));
-    credSnap = await credRef.get();
-  }
+  const credRef = db.collection("monitorCredentials").doc(monitorUid);
+  const credSnap = await credRef.get();
 
   if (credSnap.exists) {
     const remaining = (credSnap.data().entries || []).filter((e) => e.ownerId !== ownerId);
