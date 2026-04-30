@@ -98,7 +98,7 @@ describe('Property 2: Authenticated users are redirected away from Login', () =>
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Login page unit tests', () => {
-  it('renders email input and Google button when unauthenticated', () => {
+  it('renders identifier input and sign-in button when unauthenticated', () => {
     useAuth.mockReturnValue({
       isAuthenticated: false,
       isLoadingAuth: false,
@@ -106,7 +106,7 @@ describe('Login page unit tests', () => {
       role: null,
     });
 
-    const { getByPlaceholderText, getByText } = render(
+    const { getByPlaceholderText, getByRole } = render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -116,7 +116,7 @@ describe('Login page unit tests', () => {
     );
 
     expect(getByPlaceholderText('Email, Username, or Phone')).toBeTruthy();
-    expect(getByText('Continue with Google')).toBeTruthy();
+    expect(getByRole('button', { name: 'Sign In' })).toBeTruthy();
   });
 
   it('shows no error banner on clean load', () => {

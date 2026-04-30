@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  GoogleAuthProvider,
-  signInWithPopup, signInWithRedirect, getRedirectResult,
   signInWithEmailAndPassword, createUserWithEmailAndPassword,
   sendPasswordResetEmail, signInWithCustomToken,
 } from 'firebase/auth';
@@ -13,16 +11,6 @@ import { auth, functions } from '@/lib/firebase';
 import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-
-/* ─── Google Icon ─────────────────────────────────────────────────────────── */
-const GoogleIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" className="shrink-0">
-    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-  </svg>
-);
 
 /* ─── Human-readable error messages ─────────────────────────────────────────── */
 function errMsg(code) {
@@ -85,83 +73,38 @@ async function googleSignIn() {
 export default function Login() {
   const { isAuthenticated, isLoadingAuth } = useAuth();
 
-  const [identifier, setIdentifier]   = useState('');
-  const [password, setPassword]       = useState('');
-  const [showPwd, setShowPwd]         = useState(false);
-  const [isRegister, setIsRegister]   = useState(false);
-  const [loadingBtn, setLoadingBtn]   = useState(null); // 'google' | 'email' | null
-  const [redirecting, setRedirecting] = useState(false);
-  const [error, setError]             = useState('');   // inline error message
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword]     = useState('');
+  const [showPwd, setShowPwd]       = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
+  const [loadingBtn, setLoadingBtn] = useState(false);
+  const [error, setError]           = useState('');
 
-  // Handle redirect result on mount (popup-blocked fallback)
-  // Only runs when a redirect was actually pending — avoids spurious errors on fresh loads
-  useEffect(() => {
-    if (!auth?.onAuthStateChanged) return;
-    const pending = sessionStorage.getItem('__redirectPending') === '1';
-    if (!pending) return; // no redirect was initiated — skip entirely
+  const busy = loadingBtn;
 
-    setRedirecting(true);
-    getRedirectResult(auth)
-      .then(r => { if (r?.user) toast.success('Signed in successfully!'); })
-      .catch(e => {
-        // Only show errors that are meaningful to the user
-        const msg = errMsg(e.code);
-        if (msg) setError(msg);
-        // Silently ignore internal Firebase codes (no-auth-event, etc.)
-      })
-      .finally(() => {
-        sessionStorage.removeItem('__redirectPending');
-        setRedirecting(false);
-      });
-  }, []);
-
-  const busy = !!loadingBtn || redirecting;
-
-  if (isLoadingAuth || redirecting) return (
+  if (isLoadingAuth) return (
     <div className="min-h-screen bg-game-bg flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
-        <p className="text-game-muted text-sm">Signing in…</p>
+        <p className="text-game-muted text-sm">Loading…</p>
       </div>
     </div>
   );
 
   if (isAuthenticated) return <Navigate to="/" replace />;
 
-  /* ── Google ── */
-  async function handleGoogle() {
-    setError('');
-    setLoadingBtn('google');
-    try {
-      await googleSignIn();
-    } catch (e) {
-      console.error('[handleGoogle] error:', e);
-      if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
-        setLoadingBtn(null);
-        return;
-      }
-      // Always show something — never fail silently
-      const msg = errMsg(e.code) || `Sign-in failed (${e.code || 'unknown'}). Please try again. Error: ${e.message || ''}`;
-      setError(msg);
-    } finally {
-      setLoadingBtn(null);
-    }
-  }
-
   async function handleLogin(e) {
     e.preventDefault();
     if (!identifier.trim() || !password) return;
     setError('');
-    setLoadingBtn('email');
+    setLoadingBtn(true);
 
     let ownerError = null;
     try {
-      // Owners only use Email. Try to sign in if identifier looks like an email.
       if (identifier.includes('@')) {
         await signInWithEmailAndPassword(auth, identifier.trim(), password);
-        return; // success — AuthContext handles navigation
+        return; // success
       } else {
-        // Force fallback if it's clearly not an email
         throw new Error('Not an email');
       }
     } catch (err) {
@@ -176,30 +119,25 @@ export default function Login() {
 
     if (isCredentialError || ownerError.message === 'Not an email') {
       if (functions) {
-        // Fallback: try monitor sign-in via Cloud Function (accepts email, username, phone)
         try {
           const monitorSignIn = httpsCallable(functions, 'monitorSignIn');
           const result = await monitorSignIn({ identifier: identifier.trim(), password });
           await signInWithCustomToken(auth, result.data.token);
-          return; // success — AuthContext handles navigation
+          return; // success
         } catch {
-          // Both paths failed
           setError('Incorrect credentials. Please try again.');
-          setLoadingBtn(null);
+          setLoadingBtn(false);
           return;
         }
-      } else {
-        // No cloud functions, and standard auth failed
-        setError('Incorrect credentials. Please try again.');
-        setLoadingBtn(null);
-        return;
       }
+      setError('Incorrect credentials. Please try again.');
+      setLoadingBtn(false);
+      return;
     }
 
-    // Non-credential error (network, disabled account, etc.)
     const msg = errMsg(ownerError.code) || 'Sign in failed. Please try again.';
     setError(msg);
-    setLoadingBtn(null);
+    setLoadingBtn(false);
   }
 
   /* ── Registration ── */
@@ -207,10 +145,10 @@ export default function Login() {
     e.preventDefault();
     if (!identifier.trim() || !password) return;
     setError('');
-    setLoadingBtn('email');
+    setLoadingBtn(true);
     if (!identifier.includes('@')) {
       setError('An email address is required to create an account.');
-      setLoadingBtn(null);
+      setLoadingBtn(false);
       return;
     }
     try {
@@ -218,7 +156,7 @@ export default function Login() {
     } catch (err) {
       const msg = errMsg(err.code) || 'Registration failed. Please try again.';
       setError(msg);
-      setLoadingBtn(null);
+      setLoadingBtn(false);
     }
   }
 
@@ -254,28 +192,6 @@ export default function Login() {
         {/* Inline error banner */}
         <ErrorBanner message={error} />
 
-        {/* Google button */}
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={busy}
-          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-white/10 border border-white/10 transition-all hover:bg-white/15 hover:border-white/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loadingBtn === 'google'
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <GoogleIcon />
-          }
-          <span className="text-xs">
-            {loadingBtn === 'google' ? 'Opening Google sign-in…' : 'Continue with Google'}
-          </span>
-        </button>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-game-border" />
-          <span className="text-game-muted text-xs">or email</span>
-          <div className="flex-1 h-px bg-game-border" />
-        </div>
 
         {/* Email / Password form */}
         <form onSubmit={isRegister ? handleRegister : handleLogin} className="space-y-2.5">
@@ -314,7 +230,7 @@ export default function Login() {
             disabled={busy}
             className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm"
           >
-            {loadingBtn === 'email'
+            {loadingBtn
               ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Please wait…</>
               : isRegister ? 'Create Account' : 'Sign In'
             }
