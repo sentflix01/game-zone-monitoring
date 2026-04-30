@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, initializeAuth, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, initializeAuth, browserLocalPersistence, browserPopupRedirectResolver } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
@@ -35,11 +35,15 @@ if (missing.length === 0) {
     db = getFirestore(app);
     functions = getFunctions(app);
 
-    // Always use initializeAuth with explicit browserLocalPersistence.
+    // Always use initializeAuth with explicit persistence and popup/redirect resolver.
     // Plain getAuth() probes persistence via XhrIo.create() which crashes
     // in Cloudflare Pages Edge runtime (no XMLHttpRequest).
+    // initializeAuth does NOT auto-register the popup/redirect resolver — must pass it explicitly.
     try {
-      auth = initializeAuth(app, { persistence: browserLocalPersistence });
+      auth = initializeAuth(app, {
+        persistence: browserLocalPersistence,
+        popupRedirectResolver: browserPopupRedirectResolver,
+      });
     } catch (e) {
       // 'auth/already-initialized' thrown on HMR — safe to fall back
       auth = getAuth(app);
