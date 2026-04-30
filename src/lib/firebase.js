@@ -35,13 +35,13 @@ if (missing.length === 0) {
     db = getFirestore(app);
     functions = getFunctions(app);
 
-    if (isCapacitor) {
-      try {
-        auth = initializeAuth(app, { persistence: browserLocalPersistence });
-      } catch (e) {
-        auth = getAuth(app);
-      }
-    } else {
+    // Always use initializeAuth with explicit browserLocalPersistence.
+    // Plain getAuth() probes persistence via XhrIo.create() which crashes
+    // in Cloudflare Pages Edge runtime (no XMLHttpRequest).
+    try {
+      auth = initializeAuth(app, { persistence: browserLocalPersistence });
+    } catch (e) {
+      // 'auth/already-initialized' thrown on HMR — safe to fall back
       auth = getAuth(app);
     }
   } catch (err) {
