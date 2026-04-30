@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
+import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut as signOutAuth } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
 import { functions } from '@/lib/firebase';
 import { firestoreClient } from '@/api/firestoreClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -125,12 +127,44 @@ export default function Monitors() {
       }
     }
 
-    // ── Direct creation fallback is not safe in the browser because
-    // createUserWithEmailAndPassword will sign out the current owner.
-    setFormError(
-      'Monitor creation is unavailable: the backend Cloud Function is not deployed. Please deploy Firebase Functions and try again.'
-    );
-    setCreating(false);
+    // ── Direct creation fallback — uses a secondary Firebase app so the owner stays signed in ──
+    try {
+      const primaryApp = getApps()[0];
+      const secondaryAppName = `monitor-creation-${Date.now()}`;
+      const secondaryApp = initializeApp(primaryApp.options, secondaryAppName);
+      const secondaryAuth = getAuth(secondaryApp);
+
+      try {
+        const credential = await createUserWithEmailAndPassword(secondaryAuth, email.trim(), password);
+        const monitorUid = credential.user.uid;
+        await updateProfile(credential.user, { displayName: displayName.trim() });
+        await signOutAuth(secondaryAuth);
+
+        await firestoreClient.createMonitorDirect(ownerId, monitorUid, {
+          email: email.trim(),
+          displayName: displayName.trim(),
+          isExistingOwner: false,
+        });
+
+        toast.success(`Monitor "${displayName.trim()}" created successfully.`);
+        resetForm();
+        await loadMonitors();
+      } finally {
+        try { await secondaryApp.delete(); } catch (_) {}
+      }
+    } catch (err) {
+      const msg =
+        err.code === 'auth/email-already-in-use'
+          ? 'That email is already registered. Use a different email.'
+          : err.code === 'auth/invalid-email'
+          ? 'Invalid email address.'
+          : err.code === 'auth/weak-password'
+          ? 'Password must be at least 6 characters.'
+          : err.message || 'Failed to create monitor.';
+      setFormError(msg);
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function handleRemove(monitor) {

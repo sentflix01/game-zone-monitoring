@@ -3,29 +3,13 @@ import { defineConfig } from 'vite';
 import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
 
-import { cloudflare } from "@cloudflare/vite-plugin";
-
 // Use './' base for Electron (file:// protocol), '/' for web and Capacitor
 const isElectronBuild = process.env.BUILD_TARGET === 'electron';
+// Only load Cloudflare plugin when deploying to Cloudflare Pages
+const isCloudflare = process.env.CF_PAGES === '1' || process.env.DEPLOY_TARGET === 'cloudflare';
 
-export default defineConfig({
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: [],
-    // Fork pool often hits worker startup timeouts on Windows; threads are stable here.
-    pool: 'threads',
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/cypress/**',
-      '**/.{idea,git,cache,output,temp}/**',
-      '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*',
-      '**/e2e/**',
-    ],
-  },
-  base: isElectronBuild ? './' : '/',
-  plugins: [react(), VitePWA({
+export default defineConfig(async () => {
+  const plugins = [react(), VitePWA({
     registerType: 'autoUpdate',
     includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
     manifest: {
@@ -54,7 +38,6 @@ export default defineConfig({
       ],
     },
     workbox: {
-      // Cache all app assets for offline use
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
       runtimeCaching: [
         {
@@ -65,25 +48,49 @@ export default defineConfig({
       ],
     },
     devOptions: {
-      // Enable PWA in dev so you can test install prompt locally
       enabled: true,
       type: 'module',
     },
-  }), cloudflare()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+  })];
+
+  // Only add Cloudflare plugin when deploying — not during local dev/test/build
+  if (isCloudflare) {
+    const { cloudflare } = await import('@cloudflare/vite-plugin');
+    plugins.push(cloudflare());
+  }
+
+  return {
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: [],
+      pool: 'threads',
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/cypress/**',
+        '**/.{idea,git,cache,output,temp}/**',
+        '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*',
+        '**/e2e/**',
+      ],
     },
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'charts': ['recharts'],
-          'ui': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
+    base: isElectronBuild ? './' : '/',
+    plugins,
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'charts': ['recharts'],
+            'ui': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu'],
+          },
         },
       },
     },
-  },
+  };
 });
