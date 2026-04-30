@@ -115,7 +115,7 @@ describe('Login page unit tests', () => {
       </MemoryRouter>
     );
 
-    expect(getByPlaceholderText('you@example.com')).toBeTruthy();
+    expect(getByPlaceholderText('Email, Username, or Phone')).toBeTruthy();
     expect(getByText('Continue with Google')).toBeTruthy();
   });
 
