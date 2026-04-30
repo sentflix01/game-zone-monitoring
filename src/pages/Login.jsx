@@ -35,7 +35,7 @@ function errMsg(code) {
     'auth/weak-password':                            'Password must be at least 6 characters.',
     'auth/too-many-requests':                        'Too many failed attempts. Please wait a few minutes and try again.',
     'auth/operation-not-allowed':                    'Google sign-in is not enabled. Contact the administrator.',
-    'auth/unauthorized-domain':                      'This domain is not authorized. Contact the administrator.',
+    'auth/unauthorized-domain':                      'This domain is not authorized. Add the current domain under Firebase Authentication authorized domains and try again.',
     'auth/network-request-failed':                   'Network error. Check your internet connection and try again.',
     'auth/internal-error':                           'An internal error occurred. Please try again.',
     'auth/account-exists-with-different-credential': 'An account already exists with a different sign-in method for this email.',

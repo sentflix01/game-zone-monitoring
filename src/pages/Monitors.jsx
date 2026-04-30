@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { functions, auth } from '@/lib/firebase';
+import { functions } from '@/lib/firebase';
 import { firestoreClient } from '@/api/firestoreClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
@@ -126,39 +125,12 @@ export default function Monitors() {
       }
     }
 
-    // ── Direct creation (when Cloud Function not deployed) ──
-    // Creates the Firebase Auth account and writes Firestore records directly.
-    try {
-      // Create Firebase Auth user
-      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      const monitorUid = credential.user.uid;
-
-      // Set display name on the Auth profile
-      await updateProfile(credential.user, { displayName: displayName.trim() });
-
-      // Write to owners/{ownerId}/users/{monitorUid}
-      await firestoreClient.createMonitorDirect(ownerId, monitorUid, {
-        email: email.trim(),
-        displayName: displayName.trim(),
-        isExistingOwner: false,
-      });
-
-      toast.success(`Monitor "${displayName.trim()}" created successfully.`);
-      resetForm();
-      await loadMonitors();
-    } catch (err) {
-      const msg =
-        err.code === 'auth/email-already-in-use'
-          ? 'That email is already registered. Use a different email.'
-          : err.code === 'auth/invalid-email'
-          ? 'Invalid email address.'
-          : err.code === 'auth/weak-password'
-          ? 'Password must be at least 6 characters.'
-          : err.message || 'Failed to create monitor.';
-      setFormError(msg);
-    } finally {
-      setCreating(false);
-    }
+    // ── Direct creation fallback is not safe in the browser because
+    // createUserWithEmailAndPassword will sign out the current owner.
+    setFormError(
+      'Monitor creation is unavailable: the backend Cloud Function is not deployed. Please deploy Firebase Functions and try again.'
+    );
+    setCreating(false);
   }
 
   async function handleRemove(monitor) {

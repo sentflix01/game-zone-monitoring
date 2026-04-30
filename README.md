@@ -36,6 +36,16 @@ Users log in via:
 - **Email link (OTP)** — enter email, receive a magic link, click to sign in
 - **Google OAuth** — one-click sign in with Google account
 
+### Google OAuth setup
+
+In Firebase Console:
+1. Go to `Authentication` → `Sign-in method`
+2. Enable **Google** sign-in
+3. Go to `Authentication` → `Sign-in method` → `Authorized domains`
+4. Add `localhost` for local development and your production domain(s)
+
+If you see `auth/unauthorized-domain`, it means the app's current domain is not listed in Firebase authorized domains.
+
 ## Roles
 
 - `admin` — full access (financial data, expenses, analytics, console/player management)
