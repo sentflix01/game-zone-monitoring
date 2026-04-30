@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut as signOutAuth } from 'firebase/auth';
-import { initializeApp, getApps } from 'firebase/app';
 import { functions } from '@/lib/firebase';
 import { firestoreClient } from '@/api/firestoreClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -75,6 +73,10 @@ export default function Monitors() {
     setShowConfirmPwd(false);
   }
 
+  function functionUnavailableMessage() {
+    return 'Monitor management is currently unavailable. Cloud Functions must be deployed and reachable.';
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!password || !confirmPassword || !displayName.trim()) {
@@ -98,97 +100,43 @@ export default function Monitors() {
     setFormError('');
     setDualRoleWarning(null);
 
-    // ── Try Cloud Function first (deployed environment) ──
-    if (functions) {
-      try {
-        const createMonitorFn = httpsCallable(functions, 'createMonitor');
-        const result = await createMonitorFn({
-          email: email.trim(),
-          username: username.trim(),
-          phone: phone.trim(),
-          password,
-          displayName: displayName.trim(),
-        });
-
-        if (result.data.alreadyOwner) {
-          setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() || username.trim() || phone.trim() });
-          toast.success(`Monitor "${displayName.trim()}" added (dual-role).`);
-        } else {
-          toast.success(`Monitor "${displayName.trim()}" created successfully.`);
-        }
-
-        resetForm();
-        await loadMonitors();
-        setCreating(false);
-        return;
-      } catch (err) {
-        // If function not deployed (not-found / internal), fall through to direct creation
-        const isFunctionMissing =
-          err.code === 'functions/not-found' ||
-          err.code === 'functions/internal' ||
-          err.code === 'functions/unavailable';
-
-        if (!isFunctionMissing) {
-          // Real error — show it
-          const msg =
-            err.code === 'functions/already-exists'
-              ? 'This email is already a monitor under your zone.'
-              : err.code === 'functions/invalid-argument'
-              ? 'Invalid details. Check all fields and try again.'
-              : err.message || 'Failed to create monitor.';
-          setFormError(msg);
-          setCreating(false);
-          return;
-        }
-        // Fall through to direct creation below
-      }
+    if (!functions) {
+      setFormError(functionUnavailableMessage());
+      setCreating(false);
+      return;
     }
 
-    // ── Direct creation fallback — uses a secondary Firebase app so the owner stays signed in ──
     try {
-      const primaryApp = getApps()[0];
-      const primaryAuth = getAuth(primaryApp);
-      const isSelf = email.trim() && email.trim().toLowerCase() === primaryAuth.currentUser?.email?.toLowerCase();
-      
-      const authEmail = email.trim() || `monitor-${username.trim() || phone.trim()}@synthetic.gamezone.local`;
-
-      let monitorUid;
-      if (isSelf) {
-        monitorUid = primaryAuth.currentUser.uid;
-      } else {
-        const secondaryAppName = `monitor-creation-${Date.now()}`;
-        const secondaryApp = initializeApp(primaryApp.options, secondaryAppName);
-        const secondaryAuth = getAuth(secondaryApp);
-
-        try {
-          const credential = await createUserWithEmailAndPassword(secondaryAuth, authEmail, password);
-          monitorUid = credential.user.uid;
-          await updateProfile(credential.user, { displayName: displayName.trim() });
-          await signOutAuth(secondaryAuth);
-        } finally {
-          try { await secondaryApp.delete(); } catch (_) {}
-        }
-      }
-
-      await firestoreClient.createMonitorDirect(ownerId, monitorUid, {
+      const createMonitorFn = httpsCallable(functions, 'createMonitor');
+      const result = await createMonitorFn({
         email: email.trim(),
         username: username.trim(),
         phone: phone.trim(),
+        password,
         displayName: displayName.trim(),
-        isExistingOwner: isSelf,
       });
 
-      if (isSelf) {
+      if (result.data.alreadyOwner) {
         setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() || username.trim() || phone.trim() });
-        toast.success(`Monitor "${displayName.trim()}" added (dual-role). Note: Password login requires deployed Cloud Functions.`);
+        toast.success(`Monitor "${displayName.trim()}" added (dual-role).`);
       } else {
         toast.success(`Monitor "${displayName.trim()}" created successfully.`);
       }
       resetForm();
       await loadMonitors();
     } catch (err) {
+      const isFunctionMissing =
+        err.code === 'functions/not-found' ||
+        err.code === 'functions/internal' ||
+        err.code === 'functions/unavailable';
       const msg =
-        err.code === 'auth/email-already-in-use'
+        isFunctionMissing
+          ? functionUnavailableMessage()
+          : err.code === 'functions/already-exists'
+          ? 'This email is already a monitor under your zone.'
+          : err.code === 'functions/invalid-argument'
+          ? 'Invalid details. Check all fields and try again.'
+          : err.code === 'auth/email-already-in-use'
           ? 'That email is already registered. Use a different email.'
           : err.code === 'auth/invalid-email'
           ? 'Invalid email address.'
@@ -204,32 +152,22 @@ export default function Monitors() {
   async function handleRemove(monitor) {
     if (!window.confirm(`Remove monitor "${monitor.displayName || monitor.email}"? They will lose access immediately.`)) return;
 
-    if (functions) {
-      try {
-        const deleteMonitorFn = httpsCallable(functions, 'deleteMonitor');
-        await deleteMonitorFn({ monitorUid: monitor.id });
-        toast.success('Monitor removed.');
-        setMonitors((prev) => prev.filter((m) => m.id !== monitor.id));
-        return;
-      } catch (err) {
-        const isFunctionMissing =
-          err.code === 'functions/not-found' ||
-          err.code === 'functions/internal' ||
-          err.code === 'functions/unavailable';
-        if (!isFunctionMissing) {
-          toast.error('Failed to remove monitor.');
-          return;
-        }
-      }
+    if (!functions) {
+      toast.error(functionUnavailableMessage());
+      return;
     }
 
-    // Direct removal fallback
     try {
-      await firestoreClient.deleteMonitorDirect(ownerId, monitor.id);
+      const deleteMonitorFn = httpsCallable(functions, 'deleteMonitor');
+      await deleteMonitorFn({ monitorUid: monitor.id });
       toast.success('Monitor removed.');
       setMonitors((prev) => prev.filter((m) => m.id !== monitor.id));
     } catch (err) {
-      toast.error('Failed to remove monitor.');
+      const isFunctionMissing =
+        err.code === 'functions/not-found' ||
+        err.code === 'functions/internal' ||
+        err.code === 'functions/unavailable';
+      toast.error(isFunctionMissing ? functionUnavailableMessage() : 'Failed to remove monitor.');
     }
   }
 

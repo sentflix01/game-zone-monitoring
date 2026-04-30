@@ -218,4 +218,33 @@ describe('Login page unit tests', () => {
     await findByText('Firebase authentication configuration is missing. Enable Email/Password sign-in in Firebase Console.');
     await waitFor(() => expect(createUserWithEmailAndPassword).toHaveBeenCalledTimes(1));
   });
+
+  it('maps recaptcha config runtime error to configuration message', async () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoadingAuth: false,
+      user: null,
+      role: null,
+    });
+    createUserWithEmailAndPassword.mockRejectedValueOnce({
+      message: 'TypeError: authInstance._canInitEmulator is not a function at _getRecaptchaConfig (setRecaptchaConfig is not a function)',
+    });
+
+    const { getByRole, getByPlaceholderText, findByText } = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(getByRole('button', { name: 'Create account' }));
+    fireEvent.change(getByPlaceholderText('you@example.com'), { target: { value: 'test@example.com' } });
+    fireEvent.change(getByPlaceholderText('Password'), { target: { value: '123456' } });
+    fireEvent.change(getByPlaceholderText('Confirm password'), { target: { value: '123456' } });
+    fireEvent.click(getByRole('button', { name: 'Create Account' }));
+
+    await findByText('Firebase authentication configuration is missing. Enable Email/Password sign-in in Firebase Console.');
+  });
 });

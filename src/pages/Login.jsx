@@ -51,6 +51,7 @@ function getAuthErrorCode(err) {
   if (err.message.includes('WEAK_PASSWORD')) return 'auth/weak-password';
   if (err.message.includes('INVALID_EMAIL')) return 'auth/invalid-email';
   if (err.message.includes('OPERATION_NOT_ALLOWED')) return 'auth/operation-not-allowed';
+  if (err.message.includes('setRecaptchaConfig is not a function')) return 'auth/configuration-not-found';
 
   return null;
 }
