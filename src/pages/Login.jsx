@@ -65,13 +65,21 @@ async function googleSignIn() {
   try {
     await signInWithPopup(auth, provider);
   } catch (err) {
-    console.error('[googleSignIn] popup failed:', err?.code, err?.message);
-    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+    console.error('[googleSignIn] popup failed:', err?.code, err?.message, err);
+    const shouldRedirect =
+      err?.code === 'auth/popup-blocked' ||
+      err?.code === 'auth/popup-closed-by-user' ||
+      err?.code === 'auth/operation-not-supported-in-this-environment' ||
+      err?.code === 'auth/cancelled-popup-request' ||
+      !err?.code;
+
+    if (shouldRedirect) {
       sessionStorage.setItem('__redirectPending', '1');
       await signInWithRedirect(auth, provider);
-    } else {
-      throw err;
+      return;
     }
+
+    throw err;
   }
 }
 
