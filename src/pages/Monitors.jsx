@@ -20,6 +20,8 @@ export default function Monitors() {
   const [creating, setCreating]         = useState(false);
   const [showForm, setShowForm]         = useState(false);
   const [email, setEmail]               = useState('');
+  const [username, setUsername]         = useState('');
+  const [phone, setPhone]               = useState('');
   const [displayName, setDisplayName]   = useState('');
   const [password, setPassword]         = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -61,6 +63,8 @@ export default function Monitors() {
 
   function resetForm() {
     setEmail('');
+    setUsername('');
+    setPhone('');
     setPassword('');
     setDisplayName('');
     setFormError('');
@@ -70,8 +74,12 @@ export default function Monitors() {
 
   async function handleCreate(e) {
     e.preventDefault();
-    if (!email.trim() || !password || !displayName.trim()) {
-      setFormError('Please fill in all fields.');
+    if (!password || !displayName.trim()) {
+      setFormError('Display name and password are required.');
+      return;
+    }
+    if (!email.trim() && !username.trim() && !phone.trim()) {
+      setFormError('Please provide at least one identifier: Email, Username, or Phone.');
       return;
     }
     if (password.length < 6) {
@@ -89,12 +97,14 @@ export default function Monitors() {
         const createMonitorFn = httpsCallable(functions, 'createMonitor');
         const result = await createMonitorFn({
           email: email.trim(),
+          username: username.trim(),
+          phone: phone.trim(),
           password,
           displayName: displayName.trim(),
         });
 
         if (result.data.alreadyOwner) {
-          setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() });
+          setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() || username.trim() || phone.trim() });
           toast.success(`Monitor "${displayName.trim()}" added (dual-role).`);
         } else {
           toast.success(`Monitor "${displayName.trim()}" created successfully.`);
@@ -130,28 +140,45 @@ export default function Monitors() {
     // ── Direct creation fallback — uses a secondary Firebase app so the owner stays signed in ──
     try {
       const primaryApp = getApps()[0];
-      const secondaryAppName = `monitor-creation-${Date.now()}`;
-      const secondaryApp = initializeApp(primaryApp.options, secondaryAppName);
-      const secondaryAuth = getAuth(secondaryApp);
+      const primaryAuth = getAuth(primaryApp);
+      const isSelf = email.trim() && email.trim().toLowerCase() === primaryAuth.currentUser?.email?.toLowerCase();
+      
+      const authEmail = email.trim() || `monitor-${username.trim() || phone.trim()}@synthetic.gamezone.local`;
 
-      try {
-        const credential = await createUserWithEmailAndPassword(secondaryAuth, email.trim(), password);
-        const monitorUid = credential.user.uid;
-        await updateProfile(credential.user, { displayName: displayName.trim() });
-        await signOutAuth(secondaryAuth);
+      let monitorUid;
+      if (isSelf) {
+        monitorUid = primaryAuth.currentUser.uid;
+      } else {
+        const secondaryAppName = `monitor-creation-${Date.now()}`;
+        const secondaryApp = initializeApp(primaryApp.options, secondaryAppName);
+        const secondaryAuth = getAuth(secondaryApp);
 
-        await firestoreClient.createMonitorDirect(ownerId, monitorUid, {
-          email: email.trim(),
-          displayName: displayName.trim(),
-          isExistingOwner: false,
-        });
-
-        toast.success(`Monitor "${displayName.trim()}" created successfully.`);
-        resetForm();
-        await loadMonitors();
-      } finally {
-        try { await secondaryApp.delete(); } catch (_) {}
+        try {
+          const credential = await createUserWithEmailAndPassword(secondaryAuth, authEmail, password);
+          monitorUid = credential.user.uid;
+          await updateProfile(credential.user, { displayName: displayName.trim() });
+          await signOutAuth(secondaryAuth);
+        } finally {
+          try { await secondaryApp.delete(); } catch (_) {}
+        }
       }
+
+      await firestoreClient.createMonitorDirect(ownerId, monitorUid, {
+        email: email.trim(),
+        username: username.trim(),
+        phone: phone.trim(),
+        displayName: displayName.trim(),
+        isExistingOwner: isSelf,
+      });
+
+      if (isSelf) {
+        setDualRoleWarning({ displayName: displayName.trim(), email: email.trim() || username.trim() || phone.trim() });
+        toast.success(`Monitor "${displayName.trim()}" added (dual-role). Note: Password login requires deployed Cloud Functions.`);
+      } else {
+        toast.success(`Monitor "${displayName.trim()}" created successfully.`);
+      }
+      resetForm();
+      await loadMonitors();
     } catch (err) {
       const msg =
         err.code === 'auth/email-already-in-use'
@@ -312,14 +339,35 @@ export default function Monitors() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-game-muted text-sm">Email</label>
+            <label className="text-game-muted text-sm">Email <span className="text-game-muted/60">(Optional)</span></label>
             <Input
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setFormError(''); }}
               placeholder="monitor@example.com"
               className="bg-game-bg border-game-border text-white"
-              required
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-game-muted text-sm">Username <span className="text-game-muted/60">(Optional)</span></label>
+            <Input
+              type="text"
+              value={username}
+              onChange={(e) => { setUsername(e.target.value); setFormError(''); }}
+              placeholder="monitor_user"
+              className="bg-game-bg border-game-border text-white"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-game-muted text-sm">Phone Number <span className="text-game-muted/60">(Optional)</span></label>
+            <Input
+              type="tel"
+              value={phone}
+              onChange={(e) => { setPhone(e.target.value); setFormError(''); }}
+              placeholder="+1234567890"
+              className="bg-game-bg border-game-border text-white"
             />
           </div>
 
@@ -391,7 +439,9 @@ export default function Monitors() {
                 </div>
                 <div>
                   <p className="text-white font-semibold text-sm">{monitor.displayName || '—'}</p>
-                  <p className="text-game-muted text-xs">{monitor.email}</p>
+                  <p className="text-game-muted text-xs">
+                    {[monitor.email, monitor.username, monitor.phone].filter(Boolean).join(' • ')}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap justify-end">

@@ -13,6 +13,7 @@ const auth = admin.auth();
 
 /** Safe Firestore document key from an email address */
 function emailKey(email) {
+  if (!email) return 'missing_email';
   return encodeURIComponent(email.toLowerCase().trim());
 }
 
@@ -37,28 +38,39 @@ exports.createMonitor = functions.https.onCall(async (data, context) => {
   }
 
   const ownerId = context.auth.uid;
-  const { email, password, displayName } = data;
+  const { email, username, phone, password, displayName } = data;
 
-  if (!email || !password || !displayName) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing required fields: email, password, or displayName.");
+  if (!password || !displayName) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields: password or displayName.");
+  }
+  if (!email && !username && !phone) {
+    throw new functions.https.HttpsError("invalid-argument", "At least one identifier (email, username, or phone) is required.");
   }
   if (password.length < 6) {
     throw new functions.https.HttpsError("invalid-argument", "Password must be at least 6 characters.");
   }
+
+  const cleanEmail    = email ? email.trim().toLowerCase() : null;
+  const cleanUsername = username ? username.trim().toLowerCase() : null;
+  const cleanPhone    = phone ? phone.trim() : null;
+
+  // Firebase Auth requires a unique identifier (usually email). 
+  // If no email is provided, generate a deterministic synthetic email based on username/phone
+  const authEmail = cleanEmail || `monitor-${cleanUsername || cleanPhone}@synthetic.gamezone.local`;
 
   // ── 1. Detect whether this email already has a Firebase Auth account ──
   let monitorUid;
   let isExistingOwner = false;
 
   try {
-    const existing = await auth.getUserByEmail(email);
-    // Email already registered — this person is an existing owner
+    const existing = await auth.getUserByEmail(authEmail);
+    // Email already registered — this person is an existing owner (or already a monitor)
     monitorUid      = existing.uid;
     isExistingOwner = true;
   } catch (err) {
     if (err.code === "auth/user-not-found") {
       // New user — create a Firebase Auth account
-      const userRecord = await auth.createUser({ email, password, displayName });
+      const userRecord = await auth.createUser({ email: authEmail, password, displayName });
       monitorUid       = userRecord.uid;
       isExistingOwner  = false;
     } else {
@@ -76,7 +88,9 @@ exports.createMonitor = functions.https.onCall(async (data, context) => {
   batch.set(
     db.collection("owners").doc(ownerId).collection("users").doc(monitorUid),
     {
-      email,
+      email: cleanEmail || "",
+      username: cleanUsername || "",
+      phone: cleanPhone || "",
       displayName,
       isExistingOwner,
       monitorPasswordHash,
@@ -90,7 +104,9 @@ exports.createMonitor = functions.https.onCall(async (data, context) => {
       db.collection("userIndex").doc(monitorUid),
       {
         ownerId,
-        email,
+        email: cleanEmail || "",
+        username: cleanUsername || "",
+        phone: cleanPhone || "",
         role: "monitor",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }
@@ -99,17 +115,46 @@ exports.createMonitor = functions.https.onCall(async (data, context) => {
 
   await batch.commit();
 
-  // ── 4. Update monitorCredentials (array union, outside batch for read-modify-write) ──
-  const credRef  = db.collection("monitorCredentials").doc(emailKey(email));
+  // ── 4. Update monitorCredentials (searchable by multiple identifiers) ──
+  // Store all identifiers for this entry so monitorSignIn can find it.
+  const identifiers = [];
+  if (cleanEmail) identifiers.push(cleanEmail);
+  if (cleanUsername) identifiers.push(cleanUsername);
+  if (cleanPhone) identifiers.push(cleanPhone);
+
+  const credRef  = db.collection("monitorCredentials").doc(monitorUid);
   const credSnap = await credRef.get();
   const newEntry = { ownerId, monitorUid, monitorPasswordHash, displayName };
 
   if (credSnap.exists) {
+    const data = credSnap.data();
     // Remove any stale entry for this ownerId then append fresh one
-    const existing = (credSnap.data().entries || []).filter((e) => e.ownerId !== ownerId);
-    await credRef.update({ entries: [...existing, newEntry] });
+    const existing = (data.entries || []).filter((e) => e.ownerId !== ownerId);
+    
+    // Merge existing identifiers with new ones
+    const allIdentifiers = Array.from(new Set([...(data.identifiers || []), ...identifiers]));
+
+    await credRef.update({ 
+      entries: [...existing, newEntry],
+      identifiers: allIdentifiers
+    });
   } else {
-    await credRef.set({ entries: [newEntry] });
+    await credRef.set({ 
+      entries: [newEntry],
+      identifiers: identifiers
+    });
+  }
+
+  // For backward compatibility: if there's an email, write to the old emailKey doc too (so older clients don't break immediately)
+  if (cleanEmail) {
+    const oldCredRef = db.collection("monitorCredentials").doc(emailKey(cleanEmail));
+    const oldCredSnap = await oldCredRef.get();
+    if (oldCredSnap.exists) {
+      const existingOld = (oldCredSnap.data().entries || []).filter((e) => e.ownerId !== ownerId);
+      await oldCredRef.update({ entries: [...existingOld, newEntry] });
+    } else {
+      await oldCredRef.set({ entries: [newEntry] });
+    }
   }
 
   return { success: true, uid: monitorUid, alreadyOwner: isExistingOwner };
@@ -119,20 +164,38 @@ exports.createMonitor = functions.https.onCall(async (data, context) => {
 // monitorSignIn — verify monitor password, issue custom token
 // ---------------------------------------------------------------------------
 exports.monitorSignIn = functions.https.onCall(async (data) => {
-  const { email, password } = data;
+  const { identifier, password } = data; // generic identifier (email, username, or phone)
 
-  if (!email || !password) {
-    throw new functions.https.HttpsError("invalid-argument", "Email and password are required.");
+  if (!identifier || !password) {
+    throw new functions.https.HttpsError("invalid-argument", "Identifier and password are required.");
   }
 
-  const credRef  = db.collection("monitorCredentials").doc(emailKey(email));
-  const credSnap = await credRef.get();
+  const cleanIdentifier = identifier.trim().toLowerCase();
 
-  if (!credSnap.exists) {
+  // 1. Search in new structure: monitorCredentials where identifiers array-contains cleanIdentifier
+  const credsSnap = await db.collection("monitorCredentials")
+    .where("identifiers", "array-contains", cleanIdentifier)
+    .get();
+
+  let entries = [];
+  
+  if (!credsSnap.empty) {
+    // Collect all entries from matching docs
+    credsSnap.forEach(doc => {
+      entries = entries.concat(doc.data().entries || []);
+    });
+  } else {
+    // 2. Fallback to old structure: monitorCredentials keyed by emailKey
+    const oldCredRef = db.collection("monitorCredentials").doc(encodeURIComponent(cleanIdentifier));
+    const oldCredSnap = await oldCredRef.get();
+    if (oldCredSnap.exists) {
+      entries = oldCredSnap.data().entries || [];
+    }
+  }
+
+  if (entries.length === 0) {
     throw new functions.https.HttpsError("unauthenticated", "Invalid credentials.");
   }
-
-  const entries = credSnap.data().entries || [];
 
   for (const entry of entries) {
     const match = await bcrypt.compare(password, entry.monitorPasswordHash);
@@ -146,7 +209,7 @@ exports.monitorSignIn = functions.https.onCall(async (data) => {
     }
   }
 
-  // No match — same error as "not found" to prevent email enumeration
+  // No match — same error as "not found" to prevent enumeration
   throw new functions.https.HttpsError("unauthenticated", "Invalid credentials.");
 });
 
@@ -175,11 +238,18 @@ exports.updateMonitorPassword = functions.https.onCall(async (data, context) => 
   if (!monitorDoc.exists) {
     throw new functions.https.HttpsError("not-found", "Monitor record not found.");
   }
-  const { email, displayName } = monitorDoc.data();
+  const { email, username, phone, displayName } = monitorDoc.data();
 
-  // Verify current password
-  const credRef  = db.collection("monitorCredentials").doc(emailKey(email));
-  const credSnap = await credRef.get();
+  // Look for credentials in new structure
+  let credRef = db.collection("monitorCredentials").doc(monitorUid);
+  let credSnap = await credRef.get();
+
+  // If not in new structure, try old structure
+  if (!credSnap.exists && email) {
+    credRef = db.collection("monitorCredentials").doc(emailKey(email));
+    credSnap = await credRef.get();
+  }
+
   if (!credSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Monitor credentials not found.");
   }
@@ -210,12 +280,13 @@ exports.updateMonitorPassword = functions.https.onCall(async (data, context) => 
   });
 
   // Write notification to owner
+  const identUsed = displayName || username || email || phone;
   await db.collection("owners").doc(ownerId).collection("notifications").add({
     type:         "monitor_password_changed",
-    message:      `${displayName || email} changed their monitor password.`,
+    message:      `${identUsed} changed their monitor password.`,
     monitorUid,
-    monitorEmail: email,
-    displayName:  displayName || email,
+    monitorEmail: email || "",
+    displayName:  identUsed,
     createdAt:    admin.firestore.FieldValue.serverTimestamp(),
     read:         false,
   });
@@ -224,17 +295,17 @@ exports.updateMonitorPassword = functions.https.onCall(async (data, context) => 
 });
 
 // ---------------------------------------------------------------------------
-// updateMonitorEmail — monitor changes their own monitor email
+// updateMonitorEmail — monitor changes their own monitor email/identifier
 // ---------------------------------------------------------------------------
 exports.updateMonitorEmail = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   }
 
-  const { currentPassword, newEmail } = data;
+  const { currentPassword, newEmail, newUsername, newPhone } = data;
 
-  if (!currentPassword || !newEmail) {
-    throw new functions.https.HttpsError("invalid-argument", "currentPassword and newEmail are required.");
+  if (!currentPassword) {
+    throw new functions.https.HttpsError("invalid-argument", "currentPassword is required.");
   }
 
   const monitorUid = context.auth.uid;
@@ -245,11 +316,17 @@ exports.updateMonitorEmail = functions.https.onCall(async (data, context) => {
   if (!monitorDoc.exists) {
     throw new functions.https.HttpsError("not-found", "Monitor record not found.");
   }
-  const { email: oldEmail, displayName } = monitorDoc.data();
+  const { email: oldEmail } = monitorDoc.data();
 
   // Verify current password
-  const oldCredRef  = db.collection("monitorCredentials").doc(emailKey(oldEmail));
-  const oldCredSnap = await oldCredRef.get();
+  let oldCredRef = db.collection("monitorCredentials").doc(monitorUid);
+  let oldCredSnap = await oldCredRef.get();
+  
+  if (!oldCredSnap.exists && oldEmail) {
+    oldCredRef = db.collection("monitorCredentials").doc(emailKey(oldEmail));
+    oldCredSnap = await oldCredRef.get();
+  }
+
   if (!oldCredSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Monitor credentials not found.");
   }
@@ -265,56 +342,58 @@ exports.updateMonitorEmail = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("unauthenticated", "Current password is incorrect.");
   }
 
-  // Check new email not already in use as monitor credentials
-  const newCredRef  = db.collection("monitorCredentials").doc(emailKey(newEmail));
-  const newCredSnap = await newCredRef.get();
-  if (newCredSnap.exists) {
-    throw new functions.https.HttpsError("already-exists", "That email is already in use as monitor credentials.");
+  // Update logic: we now prefer the new structure (doc ID = monitorUid).
+  // Check if any other user uses these identifiers
+  const newIdentifiers = [];
+  if (newEmail) newIdentifiers.push(newEmail.trim().toLowerCase());
+  if (newUsername) newIdentifiers.push(newUsername.trim().toLowerCase());
+  if (newPhone) newIdentifiers.push(newPhone.trim());
+  
+  for (const ident of newIdentifiers) {
+    const conflictSnap = await db.collection("monitorCredentials")
+      .where("identifiers", "array-contains", ident)
+      .get();
+    
+    for (const doc of conflictSnap.docs) {
+      if (doc.id !== monitorUid) {
+        throw new functions.https.HttpsError("already-exists", `The identifier ${ident} is already in use by another account.`);
+      }
+    }
   }
-
-  // Atomic batch: migrate monitorCredentials key + update all docs
-  const updatedEntries = entries.map((e) =>
-    e.monitorUid === monitorUid ? { ...e } : e
-  );
 
   const batch = db.batch();
 
-  // Create new monitorCredentials doc
-  batch.set(newCredRef, { entries: updatedEntries });
+  // Create or update new monitorCredentials doc
+  const newCredRef = db.collection("monitorCredentials").doc(monitorUid);
+  batch.set(newCredRef, { 
+    entries, 
+    identifiers: newIdentifiers 
+  });
 
-  // Delete old monitorCredentials doc
-  batch.delete(oldCredRef);
+  // If old structure was used, delete it (migration)
+  if (oldCredRef.id !== monitorUid) {
+    batch.delete(oldCredRef);
+  }
 
-  // Update email in owners/{ownerId}/users/{monitorUid}
+  // Update in owners/{ownerId}/users/{monitorUid}
+  const updates = {};
+  if (newEmail !== undefined) updates.email = newEmail.trim().toLowerCase();
+  if (newUsername !== undefined) updates.username = newUsername.trim().toLowerCase();
+  if (newPhone !== undefined) updates.phone = newPhone.trim();
+  
   batch.update(
     db.collection("owners").doc(ownerId).collection("users").doc(monitorUid),
-    { email: newEmail }
+    updates
   );
 
-  // Update email in userIndex (only for non-existing-owner monitors)
+  // Update in userIndex (only for non-existing-owner monitors)
   const idxRef = db.collection("userIndex").doc(monitorUid);
   const idxSnap = await idxRef.get();
   if (idxSnap.exists) {
-    batch.update(idxRef, { email: newEmail });
+    batch.update(idxRef, updates);
   }
 
   await batch.commit();
-
-  // Write notification to each owner this monitor is registered under
-  const notifPromises = updatedEntries.map((e) =>
-    db.collection("owners").doc(e.ownerId).collection("notifications").add({
-      type:         "monitor_email_changed",
-      message:      `${displayName || oldEmail} changed their monitor email from ${oldEmail} to ${newEmail}.`,
-      monitorUid,
-      monitorEmail: newEmail,
-      oldEmail,
-      newEmail,
-      displayName:  displayName || oldEmail,
-      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
-      read:         false,
-    })
-  );
-  await Promise.all(notifPromises);
 
   return { success: true };
 });
@@ -343,8 +422,15 @@ exports.deleteMonitor = functions.https.onCall(async (data, context) => {
   const { email, isExistingOwner } = monitorDoc.data();
 
   // ── 1. Update monitorCredentials — remove this owner's entry ──
-  const credRef  = db.collection("monitorCredentials").doc(emailKey(email));
-  const credSnap = await credRef.get();
+  // Check new structure first
+  let credRef = db.collection("monitorCredentials").doc(monitorUid);
+  let credSnap = await credRef.get();
+
+  // Fallback to old structure
+  if (!credSnap.exists && email) {
+    credRef = db.collection("monitorCredentials").doc(emailKey(email));
+    credSnap = await credRef.get();
+  }
 
   if (credSnap.exists) {
     const remaining = (credSnap.data().entries || []).filter((e) => e.ownerId !== ownerId);

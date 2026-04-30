@@ -68,9 +68,7 @@ async function googleSignIn() {
     console.error('[googleSignIn] popup failed:', err?.code, err?.message, err);
     const shouldRedirect =
       err?.code === 'auth/popup-blocked' ||
-      err?.code === 'auth/popup-closed-by-user' ||
       err?.code === 'auth/operation-not-supported-in-this-environment' ||
-      err?.code === 'auth/cancelled-popup-request' ||
       !err?.code;
 
     if (shouldRedirect) {
@@ -87,7 +85,7 @@ async function googleSignIn() {
 export default function Login() {
   const { isAuthenticated, isLoadingAuth } = useAuth();
 
-  const [email, setEmail]             = useState('');
+  const [identifier, setIdentifier]   = useState('');
   const [password, setPassword]       = useState('');
   const [showPwd, setShowPwd]         = useState(false);
   const [isRegister, setIsRegister]   = useState(false);
@@ -150,17 +148,22 @@ export default function Login() {
     }
   }
 
-  /* ── Email sign-in (owner path + monitor fallback) ── */
-  async function handleEmail(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    if (!email.trim() || !password) return;
+    if (!identifier.trim() || !password) return;
     setError('');
     setLoadingBtn('email');
 
     let ownerError = null;
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      return; // success — AuthContext handles navigation
+      // Owners only use Email. Try to sign in if identifier looks like an email.
+      if (identifier.includes('@')) {
+        await signInWithEmailAndPassword(auth, identifier.trim(), password);
+        return; // success — AuthContext handles navigation
+      } else {
+        // Force fallback if it's clearly not an email
+        throw new Error('Not an email');
+      }
     } catch (err) {
       ownerError = err;
     }
@@ -171,16 +174,23 @@ export default function Login() {
       'auth/user-not-found',
     ].includes(ownerError.code);
 
-    if (isCredentialError && functions) {
-      // Fallback: try monitor sign-in via Cloud Function
-      try {
-        const monitorSignIn = httpsCallable(functions, 'monitorSignIn');
-        const result = await monitorSignIn({ email: email.trim(), password });
-        await signInWithCustomToken(auth, result.data.token);
-        return; // success — AuthContext handles navigation
-      } catch {
-        // Both paths failed
-        setError('Incorrect email or password. Please try again.');
+    if (isCredentialError || ownerError.message === 'Not an email') {
+      if (functions) {
+        // Fallback: try monitor sign-in via Cloud Function (accepts email, username, phone)
+        try {
+          const monitorSignIn = httpsCallable(functions, 'monitorSignIn');
+          const result = await monitorSignIn({ identifier: identifier.trim(), password });
+          await signInWithCustomToken(auth, result.data.token);
+          return; // success — AuthContext handles navigation
+        } catch {
+          // Both paths failed
+          setError('Incorrect credentials. Please try again.');
+          setLoadingBtn(null);
+          return;
+        }
+      } else {
+        // No cloud functions, and standard auth failed
+        setError('Incorrect credentials. Please try again.');
         setLoadingBtn(null);
         return;
       }
@@ -195,11 +205,16 @@ export default function Login() {
   /* ── Registration ── */
   async function handleRegister(e) {
     e.preventDefault();
-    if (!email.trim() || !password) return;
+    if (!identifier.trim() || !password) return;
     setError('');
     setLoadingBtn('email');
+    if (!identifier.includes('@')) {
+      setError('An email address is required to create an account.');
+      setLoadingBtn(null);
+      return;
+    }
     try {
-      await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await createUserWithEmailAndPassword(auth, identifier.trim(), password);
     } catch (err) {
       const msg = errMsg(err.code) || 'Registration failed. Please try again.';
       setError(msg);
@@ -207,15 +222,14 @@ export default function Login() {
     }
   }
 
-  /* ── Forgot password ── */
   async function handleForgot() {
-    if (!email.trim()) {
+    if (!identifier.trim() || !identifier.includes('@')) {
       setError('Enter your email address first, then click Forgot password.');
       return;
     }
     setError('');
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordResetEmail(auth, identifier.trim());
       toast.success('Password reset email sent! Check your inbox.');
     } catch (e) {
       const msg = errMsg(e.code) || 'Failed to send reset email.';
@@ -264,16 +278,16 @@ export default function Login() {
         </div>
 
         {/* Email / Password form */}
-        <form onSubmit={isRegister ? handleRegister : handleEmail} className="space-y-2.5">
+        <form onSubmit={isRegister ? handleRegister : handleLogin} className="space-y-2.5">
           <Input
-            type="email"
-            value={email}
-            onChange={e => { setEmail(e.target.value); setError(''); }}
-            placeholder="you@example.com"
+            type={isRegister ? "email" : "text"}
+            value={identifier}
+            onChange={e => { setIdentifier(e.target.value); setError(''); }}
+            placeholder={isRegister ? "you@example.com" : "Email, Username, or Phone"}
             required
             disabled={busy}
             className="bg-game-bg border-game-border text-white text-sm"
-            autoComplete="email"
+            autoComplete={isRegister ? "email" : "username"}
           />
           <div className="relative">
             <Input

@@ -207,10 +207,12 @@ export const firestoreClient = {
    * Writes the monitor record to owners/{ownerId}/users/{monitorUid} and
    * userIndex/{monitorUid}.
    */
-  async createMonitorDirect(ownerId, monitorUid, { email, displayName, isExistingOwner }) {
+  async createMonitorDirect(ownerId, monitorUid, { email, username, phone, displayName, isExistingOwner }) {
     // owners/{ownerId}/users/{monitorUid}
     await setDoc(doc(db, 'owners', ownerId, 'users', monitorUid), {
-      email,
+      email: email || '',
+      username: username || '',
+      phone: phone || '',
       displayName,
       isExistingOwner: isExistingOwner ?? false,
       createdAt: serverTimestamp(),
@@ -219,7 +221,9 @@ export const firestoreClient = {
     if (!isExistingOwner) {
       await setDoc(doc(db, 'userIndex', monitorUid), {
         ownerId,
-        email,
+        email: email || '',
+        username: username || '',
+        phone: phone || '',
         role: 'monitor',
         createdAt: serverTimestamp(),
       });
