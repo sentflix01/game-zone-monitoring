@@ -5,10 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // Use './' base for Electron (file:// protocol), '/' for web and Capacitor
 const isElectronBuild = process.env.BUILD_TARGET === 'electron';
-// Only load Cloudflare plugin when deploying to Cloudflare Pages
-const isCloudflare = process.env.CF_PAGES === '1' || process.env.DEPLOY_TARGET === 'cloudflare';
 
-export default defineConfig(async () => {
+export default defineConfig(() => {
   const plugins = [react(), VitePWA({
     registerType: 'autoUpdate',
     includeAssets: ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
@@ -53,11 +51,6 @@ export default defineConfig(async () => {
     },
   })];
 
-  // Only add Cloudflare plugin when deploying — not during local dev/test/build
-  if (isCloudflare) {
-    const { cloudflare } = await import('@cloudflare/vite-plugin');
-    plugins.push(cloudflare());
-  }
 
   return {
     test: {
