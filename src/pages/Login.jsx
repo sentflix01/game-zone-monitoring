@@ -7,7 +7,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { auth, functions } from '@/lib/firebase';
+import { auth, functions, firebaseReady, missingFirebaseEnvKeys } from '@/lib/firebase';
 import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,8 +31,28 @@ function errMsg(code) {
     'auth/popup-blocked':                            null,
     'auth/cancelled-popup-request':                  null,
     'auth/user-disabled':                            'This account has been disabled. Contact the administrator.',
+    'auth/app-not-authorized':                      'This app is not authorized for the current Firebase project. Check API key restrictions and auth domain settings.',
+    'auth/invalid-api-key':                          'Firebase API key is invalid. Verify your environment configuration.',
+    'auth/configuration-not-found':                  'Firebase authentication configuration is missing. Enable Email/Password sign-in in Firebase Console.',
+    'auth/password-does-not-meet-requirements':      'Password does not meet project requirements. Use a stronger password and try again.',
   };
   return map[code] ?? null;
+}
+
+function getAuthErrorCode(err) {
+  if (!err) return null;
+  if (typeof err.code === 'string' && err.code.length > 0) return err.code;
+  if (typeof err.message !== 'string') return null;
+
+  const firebaseStyle = err.message.match(/\(auth\/([^)]+)\)/i);
+  if (firebaseStyle) return `auth/${firebaseStyle[1].toLowerCase()}`;
+
+  if (err.message.includes('EMAIL_EXISTS')) return 'auth/email-already-in-use';
+  if (err.message.includes('WEAK_PASSWORD')) return 'auth/weak-password';
+  if (err.message.includes('INVALID_EMAIL')) return 'auth/invalid-email';
+  if (err.message.includes('OPERATION_NOT_ALLOWED')) return 'auth/operation-not-allowed';
+
+  return null;
 }
 
 /* ─── Inline error banner — only renders when there is an actual error ──── */
@@ -60,7 +80,10 @@ export default function Login() {
   const [loadingBtn, setLoadingBtn]         = useState(false);
   const [error, setError]                   = useState('');
 
-  const busy = loadingBtn;
+  const busy = loadingBtn || !firebaseReady;
+  const firebaseConfigMessage = !firebaseReady
+    ? `Authentication is not configured for this deployment. Missing: ${missingFirebaseEnvKeys.join(', ')}.`
+    : '';
 
   if (isLoadingAuth) return (
     <div className="min-h-screen bg-game-bg flex items-center justify-center">
@@ -75,6 +98,10 @@ export default function Login() {
 
   async function handleLogin(e) {
     e.preventDefault();
+    if (!firebaseReady) {
+      setError(firebaseConfigMessage || 'Authentication is not configured for this deployment.');
+      return;
+    }
     if (!identifier.trim() || !password) return;
     setError('');
     setLoadingBtn(true);
@@ -125,6 +152,10 @@ export default function Login() {
   /* ── Registration ── */
   async function handleRegister(e) {
     e.preventDefault();
+    if (!firebaseReady) {
+      setError(firebaseConfigMessage || 'Authentication is not configured for this deployment.');
+      return;
+    }
     if (!identifier.trim() || !password || !confirmPassword) return;
     setError('');
     if (!identifier.includes('@')) {
@@ -143,14 +174,19 @@ export default function Login() {
     try {
       await createUserWithEmailAndPassword(auth, identifier.trim(), password);
     } catch (err) {
-      console.error('[Registration Error]', err.code, err.message, err);
-      const msg = errMsg(err.code) || 'Registration failed. Please try again.';
+      const code = getAuthErrorCode(err);
+      console.error('[Registration Error]', code, err?.message, err);
+      const msg = errMsg(code) || 'Registration failed. Please try again.';
       setError(msg);
       setLoadingBtn(false);
     }
   }
 
   async function handleForgot() {
+    if (!firebaseReady) {
+      setError(firebaseConfigMessage || 'Authentication is not configured for this deployment.');
+      return;
+    }
     if (!identifier.trim() || !identifier.includes('@')) {
       setError('Enter your email address first, then click Forgot password.');
       return;
@@ -180,7 +216,7 @@ export default function Login() {
       <div className="w-full max-w-sm bg-game-surface border border-game-border rounded-2xl p-5 space-y-4 shadow-xl">
 
         {/* Inline error banner */}
-        <ErrorBanner message={error} />
+        <ErrorBanner message={error || firebaseConfigMessage} />
 
 
         {/* Email / Password form */}
@@ -210,6 +246,7 @@ export default function Login() {
               type="button"
               onClick={() => setShowPwd(!showPwd)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
+            disabled={busy}
               tabIndex={-1}
             >
               {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -233,6 +270,7 @@ export default function Login() {
                 type="button"
                 onClick={() => setShowConfirmPwd(!showConfirmPwd)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
+                disabled={busy}
                 tabIndex={-1}
               >
                 {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -267,6 +305,7 @@ export default function Login() {
           <button
             type="button"
             onClick={() => { setIsRegister(!isRegister); setError(''); setConfirmPassword(''); setShowConfirmPwd(false); }}
+            disabled={busy}
             className="hover:text-white transition-colors ml-auto"
           >
             {isRegister ? 'Sign in instead' : 'Create account'}

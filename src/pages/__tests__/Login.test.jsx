@@ -1,7 +1,7 @@
 // Feature: auth-and-roles, Property 2: Authenticated users are redirected away from Login
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import * as fc from 'fast-check';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -17,6 +17,8 @@ vi.mock('@/lib/firebase', () => ({
     onAuthStateChanged: vi.fn(),
     currentUser: null,
   },
+  firebaseReady: true,
+  missingFirebaseEnvKeys: [],
 }));
 
 // Mock firebase/auth
@@ -49,9 +51,13 @@ vi.mock('sonner', () => ({
 
 import { useAuth } from '@/lib/AuthContext';
 import Login from '../Login';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import * as firebaseRuntime from '@/lib/firebase';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  firebaseRuntime.firebaseReady = true;
+  firebaseRuntime.missingFirebaseEnvKeys = [];
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,5 +164,58 @@ describe('Login page unit tests', () => {
     );
 
     expect(container.querySelector('.animate-spin')).toBeTruthy();
+  });
+
+  it('shows firebase config error and disables auth submit when unconfigured', () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoadingAuth: false,
+      user: null,
+      role: null,
+    });
+    firebaseRuntime.firebaseReady = false;
+    firebaseRuntime.missingFirebaseEnvKeys = ['VITE_FIREBASE_API_KEY'];
+
+    const { getByText, getByRole } = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(getByText('Authentication is not configured for this deployment. Missing: VITE_FIREBASE_API_KEY.')).toBeTruthy();
+    expect(getByRole('button', { name: 'Sign In' }).disabled).toBe(true);
+  });
+
+  it('shows specific message when Firebase error lacks err.code', async () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoadingAuth: false,
+      user: null,
+      role: null,
+    });
+    createUserWithEmailAndPassword.mockRejectedValueOnce({
+      message: 'Firebase: Error (auth/configuration-not-found).',
+    });
+
+    const { getByRole, getByPlaceholderText, findByText } = render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(getByRole('button', { name: 'Create account' }));
+    fireEvent.change(getByPlaceholderText('you@example.com'), { target: { value: 'test@example.com' } });
+    fireEvent.change(getByPlaceholderText('Password'), { target: { value: '123456' } });
+    fireEvent.change(getByPlaceholderText('Confirm password'), { target: { value: '123456' } });
+    fireEvent.click(getByRole('button', { name: 'Create Account' }));
+
+    await findByText('Firebase authentication configuration is missing. Enable Email/Password sign-in in Firebase Console.');
+    await waitFor(() => expect(createUserWithEmailAndPassword).toHaveBeenCalledTimes(1));
   });
 });

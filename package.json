@@ -6,9 +6,10 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:web": "vite build",
-    "build:electron": "cross-env BUILD_TARGET=electron vite build",
+    "check:firebase-env": "node scripts/check-firebase-env.mjs",
+    "build": "npm run check:firebase-env && vite build",
+    "build:web": "npm run check:firebase-env && vite build",
+    "build:electron": "npm run check:firebase-env && cross-env BUILD_TARGET=electron vite build",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "package:electron": "electron-builder",
     "cap:sync": "npx cap sync android",

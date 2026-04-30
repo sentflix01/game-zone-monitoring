@@ -102,6 +102,9 @@ npx cap open android   # open in Android Studio
 npx cap open ios       # open in Xcode
 ```
 
+`npm run build`, `npm run build:web`, and `npm run build:electron` now fail fast if required Firebase variables are missing (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`).  
+For exceptional local troubleshooting only, you can bypass this with `SKIP_FIREBASE_ENV_CHECK=1`.
+
 ## Cloudflare Pages Deployment
 
 This app is released via Cloudflare Pages only. Remove any Netlify integration before release.
@@ -110,6 +113,20 @@ This app is released via Cloudflare Pages only. Remove any Netlify integration b
 2. Set the build command to `npm run build`.
 3. Set the output directory to `dist`.
 4. Add Firebase Authorized Domains for your Pages URL.
+
+### Required Cloudflare build variables
+
+In Cloudflare Pages project settings, add these environment variables for the Production (and Preview) environment:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID` (recommended)
+- `VITE_FIREBASE_MEASUREMENT_ID` (optional)
+- `VITE_ADMIN_UIDS` (optional, app-specific roles bootstrap)
+
+`npm run build` now fails if the required Firebase keys are missing, which prevents shipping a broken auth build.
 
 ## Tests
 

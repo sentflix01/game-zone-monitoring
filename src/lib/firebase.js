@@ -23,6 +23,7 @@ const stub = {
 let auth = stub;
 let db = null;
 let functions = null;
+let firebaseReady = false;
 
 const missing = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID']
   .filter((k) => !import.meta.env[k]);
@@ -48,16 +49,20 @@ if (missing.length === 0) {
       // 'auth/already-initialized' thrown on HMR — safe to fall back
       auth = getAuth(app);
     }
+    firebaseReady = true;
   } catch (err) {
     try {
       const app = getApps()[0];
       auth = getAuth(app);
       db = getFirestore(app);
       functions = getFunctions(app);
+      firebaseReady = true;
     } catch (e) {
       console.error('[firebase] init failed:', e.message);
     }
   }
+} else {
+  console.error('[firebase] Missing config keys:', missing.join(', '));
 }
 
-export { auth, db, functions };
+export { auth, db, functions, firebaseReady, missing as missingFirebaseEnvKeys };
