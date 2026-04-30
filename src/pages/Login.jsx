@@ -46,39 +46,19 @@ function ErrorBanner({ message }) {
   );
 }
 
-/* ─── Popup → redirect fallback ──────────────────────────────────────────── */
-async function googleSignIn() {
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (err) {
-    console.error('[googleSignIn] popup failed:', err?.code, err?.message, err);
-    const shouldRedirect =
-      err?.code === 'auth/popup-blocked' ||
-      err?.code === 'auth/operation-not-supported-in-this-environment' ||
-      !err?.code;
-
-    if (shouldRedirect) {
-      sessionStorage.setItem('__redirectPending', '1');
-      await signInWithRedirect(auth, provider);
-      return;
-    }
-
-    throw err;
-  }
-}
 
 /* ─── Main Component ─────────────────────────────────────────────────────── */
 export default function Login() {
   const { isAuthenticated, isLoadingAuth } = useAuth();
 
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword]     = useState('');
-  const [showPwd, setShowPwd]       = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
-  const [loadingBtn, setLoadingBtn] = useState(false);
-  const [error, setError]           = useState('');
+  const [identifier, setIdentifier]         = useState('');
+  const [password, setPassword]             = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPwd, setShowPwd]               = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [isRegister, setIsRegister]         = useState(false);
+  const [loadingBtn, setLoadingBtn]         = useState(false);
+  const [error, setError]                   = useState('');
 
   const busy = loadingBtn;
 
@@ -143,14 +123,21 @@ export default function Login() {
   /* ── Registration ── */
   async function handleRegister(e) {
     e.preventDefault();
-    if (!identifier.trim() || !password) return;
+    if (!identifier.trim() || !password || !confirmPassword) return;
     setError('');
-    setLoadingBtn(true);
     if (!identifier.includes('@')) {
       setError('An email address is required to create an account.');
-      setLoadingBtn(false);
       return;
     }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match. Please try again.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    setLoadingBtn(true);
     try {
       await createUserWithEmailAndPassword(auth, identifier.trim(), password);
     } catch (err) {
@@ -183,7 +170,7 @@ export default function Login() {
         <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-600/30">
           <span className="text-white text-xl font-bold">PS</span>
         </div>
-        <h1 className="text-xl font-bold text-white">Sign In</h1>
+        <h1 className="text-xl font-bold text-white">{isRegister ? 'Create Account' : 'Sign In'}</h1>
         <p className="text-game-muted text-xs mt-1">Game Zone Monitoring</p>
       </div>
 
@@ -225,6 +212,31 @@ export default function Login() {
               {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+
+          {/* Confirm password — only on sign-up */}
+          {isRegister && (
+            <div className="relative">
+              <Input
+                type={showConfirmPwd ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={e => { setConfirmPassword(e.target.value); setError(''); }}
+                placeholder="Confirm password"
+                required
+                disabled={busy}
+                className="bg-game-bg border-game-border text-white text-sm pr-10"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPwd(!showConfirmPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-game-muted hover:text-white"
+                tabIndex={-1}
+              >
+                {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+
           <Button
             type="submit"
             disabled={busy}
@@ -251,7 +263,7 @@ export default function Login() {
           )}
           <button
             type="button"
-            onClick={() => { setIsRegister(!isRegister); setError(''); }}
+            onClick={() => { setIsRegister(!isRegister); setError(''); setConfirmPassword(''); setShowConfirmPwd(false); }}
             className="hover:text-white transition-colors ml-auto"
           >
             {isRegister ? 'Sign in instead' : 'Create account'}
