@@ -65,6 +65,7 @@ async function googleSignIn() {
   try {
     await signInWithPopup(auth, provider);
   } catch (err) {
+    console.error('[googleSignIn] popup failed:', err?.code, err?.message);
     if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
       sessionStorage.setItem('__redirectPending', '1');
       await signInWithRedirect(auth, provider);
@@ -128,12 +129,13 @@ export default function Login() {
     try {
       await googleSignIn();
     } catch (e) {
+      console.error('[handleGoogle] error:', e);
       if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
         setLoadingBtn(null);
         return;
       }
       // Always show something — never fail silently
-      const msg = errMsg(e.code) || `Sign-in failed (${e.code || 'unknown'}). Please try again.`;
+      const msg = errMsg(e.code) || `Sign-in failed (${e.code || 'unknown'}). Please try again. Error: ${e.message || ''}`;
       setError(msg);
     } finally {
       setLoadingBtn(null);
