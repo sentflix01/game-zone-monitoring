@@ -96,7 +96,10 @@ export default function Monitors() {
   }
 
   async function handleGenerateInvite() {
-    if (!ownerId) return;
+    if (!ownerId) {
+      toast.error('You must be signed in as an owner to generate an invite.');
+      return;
+    }
     setGeneratingInvite(true);
     try {
       const code = generateCode();
@@ -129,7 +132,14 @@ export default function Monitors() {
       setLinkCopied(false);
     } catch (err) {
       console.error('[Monitors] generateInvite error:', err);
-      toast.error('Failed to generate invite link. Please try again.');
+      // Show the actual error so the owner knows what's wrong
+      const msg =
+        err?.code === 'permission-denied'
+          ? 'Permission denied. Make sure you are signed in as an owner.'
+          : err?.code === 'unavailable'
+          ? 'Database unavailable. Check your internet connection and try again.'
+          : err?.message || 'Failed to generate invite link. Please try again.';
+      toast.error(msg);
     } finally {
       setGeneratingInvite(false);
     }

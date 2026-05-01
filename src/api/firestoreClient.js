@@ -264,6 +264,44 @@ export const firestoreClient = {
   },
 
   /**
+   * Creates an invite document at invites/{code}.
+   */
+  async createInvite(code, data) {
+    if (!db) throw new Error('Firestore is not initialized. Check Firebase configuration.');
+    await setDoc(doc(db, 'invites', code), data);
+  },
+
+  /**
+   * Lists all invites created by an owner.
+   */
+  async listInvites(ownerId) {
+    const q = query(
+      collection(db, 'invites'),
+      where('ownerId', '==', ownerId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+
+  /**
+   * Reads a single invite by code.
+   */
+  async getInvite(code) {
+    const snap = await getDoc(doc(db, 'invites', code));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  },
+
+  /**
+   * Marks an invite as used.
+   */
+  async markInviteUsed(code, monitorUid) {
+    await updateDoc(doc(db, 'invites', code), {
+      used: true,
+      usedBy: monitorUid,
+    });
+  },
+
+  /**
    * Lists notifications for an owner, ordered newest first.
    */
   async listNotifications(ownerId) {
