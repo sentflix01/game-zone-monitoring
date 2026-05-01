@@ -68,7 +68,7 @@ export default function Consoles() {
   const { ownerId } = useAuth();
   const [consoles, setConsoles] = useState([]);
   const [pricing, setPricing] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", type: "PS5", status: "available" });

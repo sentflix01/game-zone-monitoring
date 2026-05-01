@@ -31,7 +31,7 @@ import { db } from '@/lib/firebase';
 // Simple localStorage cache
 // ---------------------------------------------------------------------------
 const CACHE_PREFIX = 'gz_cache_';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — background refresh after this
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes (was 5) — fresher data
 
 function cacheKey(ownerId, col, suffix = '') {
   return `${CACHE_PREFIX}${ownerId}_${col}${suffix ? '_' + suffix : ''}`;
@@ -55,6 +55,17 @@ function invalidateCache(ownerId, col) {
     const prefix = `${CACHE_PREFIX}${ownerId}_${col}`;
     Object.keys(localStorage)
       .filter((k) => k.startsWith(prefix))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+
+// Invalidate only list/filter caches, keep individual item caches
+function invalidateListCaches(ownerId, col) {
+  try {
+    const prefix = `${CACHE_PREFIX}${ownerId}_${col}_list`;
+    const filterPrefix = `${CACHE_PREFIX}${ownerId}_${col}_filter`;
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(prefix) || k.startsWith(filterPrefix))
       .forEach((k) => localStorage.removeItem(k));
   } catch {}
 }
@@ -128,8 +139,14 @@ function makeEntity(col) {
     },
 
     async get(ownerId, id) {
+      const key = cacheKey(ownerId, col, `item_${id}`);
+      const cached = readCache(key);
+      if (cached && !cached.stale) return cached.data;
+
       const snap = await getDoc(ownerDoc(ownerId, col, id));
-      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      const data = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      if (data) writeCache(key, data);
+      return data;
     },
 
     async create(ownerId, data) {
@@ -137,21 +154,26 @@ function makeEntity(col) {
         ...data,
         created_date: new Date().toISOString(),
       });
-      // Invalidate list/filter caches so next read is fresh
-      invalidateCache(ownerId, col);
-      return { id: ref.id, ...data, created_date: new Date().toISOString() };
+      // Only invalidate list caches — item caches for other docs stay valid
+      invalidateListCaches(ownerId, col);
+      const created = { id: ref.id, ...data, created_date: new Date().toISOString() };
+      writeCache(cacheKey(ownerId, col, `item_${ref.id}`), created);
+      return created;
     },
 
     async update(ownerId, id, data) {
       const ref = ownerDoc(ownerId, col, id);
       await updateDoc(ref, data);
-      invalidateCache(ownerId, col);
+      // Invalidate list caches and the specific item cache
+      invalidateListCaches(ownerId, col);
+      try { localStorage.removeItem(cacheKey(ownerId, col, `item_${id}`)); } catch {}
       return { id, ...data };
     },
 
     async delete(ownerId, id) {
       await deleteDoc(ownerDoc(ownerId, col, id));
-      invalidateCache(ownerId, col);
+      invalidateListCaches(ownerId, col);
+      try { localStorage.removeItem(cacheKey(ownerId, col, `item_${id}`)); } catch {}
     },
   };
 }

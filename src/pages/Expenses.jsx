@@ -20,7 +20,7 @@ export default function Expenses() {
   const { t } = useTranslation();
   const { ownerId } = useAuth();
   const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
   const [form, setForm] = useState({ description: "", amount: "", category: "other", date: new Date().toISOString().slice(0, 10) });
 
   const load = async () => {

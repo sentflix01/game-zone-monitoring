@@ -15,7 +15,7 @@ export default function Report() {
   const { t } = useTranslation();
   const { ownerId } = useAuth();
   const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
 
   useEffect(() => {
     let cancelled = false;

@@ -16,7 +16,7 @@ export default function Analytics() {
   const { ownerId } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
 
   useEffect(() => {

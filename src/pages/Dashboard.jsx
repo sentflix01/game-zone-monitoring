@@ -28,7 +28,8 @@ export default function Dashboard() {
   const [consoles, setConsoles] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Start as false if ownerId already available (cache hit) — skip skeleton on return visits
+  const [loading, setLoading] = useState(!ownerId);
   const [deferredPrompt, setDeferredPrompt] = useState(() => {
     try { return window.__installPrompt || null; } catch { return null; }
   });
@@ -79,6 +80,8 @@ export default function Dashboard() {
       }
     };
 
+    // Show content immediately if we already have data (cache hit returns synchronously)
+    // The Promise.all above resolves instantly from localStorage cache
     void load();
 
     return () => {

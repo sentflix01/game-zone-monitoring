@@ -23,7 +23,7 @@ export default function Settings() {
   const [rates, setRates] = useState({ PS5: "", PS4: "" });
   const [gameTimes, setGameTimes] = useState({ PS5: "", PS4: "" });
   const [currency, setCurrency] = useState("USD");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");

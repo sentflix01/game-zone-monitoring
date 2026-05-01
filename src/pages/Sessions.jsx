@@ -10,7 +10,7 @@ export default function Sessions() {
   const { t } = useTranslation();
   const { ownerId } = useAuth();
   const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {

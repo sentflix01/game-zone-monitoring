@@ -10,7 +10,7 @@ export default function Players() {
   const { t } = useTranslation();
   const { ownerId } = useAuth();
   const [players, setPlayers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!ownerId);
   const [selected, setSelected] = useState(null);
   const [sessions, setSessions] = useState([]);
 
