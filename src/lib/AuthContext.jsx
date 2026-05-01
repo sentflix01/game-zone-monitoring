@@ -77,13 +77,13 @@ export const AuthProvider = ({ children }) => {
       }
 
       // ── Optimization 1: If cache uid matches, skip ALL Firestore calls ──
-      // The user is the same person as last time — trust the cache immediately.
-      if (_cache && _cache.uid === firebaseUser.uid) {
+      // Re-read cache here to get the freshest value (not the closure from mount time)
+      const currentCache = readAuthCache();
+      if (currentCache && currentCache.uid === firebaseUser.uid) {
         setUser(firebaseUser);
-        // Explicitly re-set role and ownerId from cache (don't rely on useState initial value)
-        // This ensures RoleGuard and other role-dependent UI always has the correct value
-        setRoleState(_cache.role ?? 'owner');
-        setOwnerId(_cache.ownerId ?? firebaseUser.uid);
+        // Explicitly set role and ownerId — never rely on stale closure values
+        setRoleState(currentCache.role ?? 'owner');
+        setOwnerId(currentCache.ownerId ?? firebaseUser.uid);
         setIsAuthenticated(true);
         setIsLoadingAuth(false);
         // Verify in background without blocking the UI
@@ -198,11 +198,7 @@ export const AuthProvider = ({ children }) => {
 
       unsubscribe = onAuthStateChanged(
         auth,
-        (firebaseUser) => {
-          // Skip if we already resolved from currentUser (same uid)
-          if (auth.currentUser && firebaseUser?.uid === auth.currentUser.uid && !isLoadingAuth) return;
-          resolveUser(firebaseUser);
-        },
+        (firebaseUser) => resolveUser(firebaseUser),
         (error) => {
           clearTimeout(safetyTimeout);
           setAuthError(error?.message || 'Auth state listener failed');
