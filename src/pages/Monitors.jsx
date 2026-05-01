@@ -35,6 +35,8 @@ export default function Monitors() {
   const [inviteLink, setInviteLink]             = useState('');
   const [showInviteModal, setShowInviteModal]   = useState(false);
   const [linkCopied, setLinkCopied]             = useState(false);
+  // Expiry duration picker
+  const [inviteExpiry, setInviteExpiry]         = useState({ value: '48', unit: 'hours' });
 
   // Notifications
   const [notifications, setNotifications] = useState([]);
@@ -99,7 +101,17 @@ export default function Monitors() {
     try {
       const code = generateCode();
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours
+
+      // Convert owner-selected duration to milliseconds
+      const val = parseInt(inviteExpiry.value, 10) || 48;
+      const unitMs = {
+        hours:  60 * 60 * 1000,
+        days:   24 * 60 * 60 * 1000,
+        weeks:  7 * 24 * 60 * 60 * 1000,
+        months: 30 * 24 * 60 * 60 * 1000,
+        years:  365 * 24 * 60 * 60 * 1000,
+      };
+      const expiresAt = new Date(now.getTime() + val * (unitMs[inviteExpiry.unit] || unitMs.hours));
 
       await firestoreClient.createInvite(code, {
         ownerId,
@@ -351,36 +363,65 @@ export default function Monitors() {
 
       {/* Add Monitor button */}
       {!showForm && (
-        <div className="flex flex-wrap gap-3">
-          <Button
-            onClick={() => {
-              setShowForm(true);
-              setDualRoleWarning(null);
-              setFormError('');
-              // Reset all form fields when opening fresh
-              setEmail('');
-              setUsername('');
-              setPhone('');
-              setDisplayName('');
-              setPassword('');
-              setConfirmPassword('');
-            }}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white"
-          >
-            <UserPlus className="w-4 h-4" />
-            Add Monitor
-          </Button>
-          <Button
-            onClick={handleGenerateInvite}
-            disabled={generatingInvite}
-            variant="outline"
-            className="flex items-center gap-2 border-game-border text-white hover:bg-white/10"
-          >
-            {generatingInvite
-              ? <><Loader2 className="w-4 h-4 animate-spin" />Generating…</>
-              : <><Link2 className="w-4 h-4" />Generate Invite Link</>
-            }
-          </Button>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => {
+                setShowForm(true);
+                setDualRoleWarning(null);
+                setFormError('');
+                setEmail('');
+                setUsername('');
+                setPhone('');
+                setDisplayName('');
+                setPassword('');
+                setConfirmPassword('');
+              }}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Monitor
+            </Button>
+
+            {/* Invite link section */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Duration picker */}
+              <div className="flex items-center gap-1 bg-game-surface border border-game-border rounded-lg px-2 py-1.5">
+                <span className="text-game-muted text-xs">Expires in</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="999"
+                  value={inviteExpiry.value}
+                  onChange={e => setInviteExpiry(prev => ({ ...prev, value: e.target.value }))}
+                  className="w-14 bg-game-bg border border-game-border rounded px-2 py-0.5 text-white text-xs text-center focus:outline-none focus:border-blue-500"
+                />
+                <select
+                  value={inviteExpiry.unit}
+                  onChange={e => setInviteExpiry(prev => ({ ...prev, unit: e.target.value }))}
+                  className="bg-game-bg border border-game-border rounded px-2 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                >
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                  <option value="weeks">Weeks</option>
+                  <option value="months">Months</option>
+                  <option value="years">Years</option>
+                </select>
+              </div>
+
+              <Button
+                onClick={handleGenerateInvite}
+                disabled={generatingInvite}
+                variant="outline"
+                className="flex items-center gap-2 border-game-border text-white hover:bg-white/10"
+              >
+                {generatingInvite
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Generating…</>
+                  : <><Link2 className="w-4 h-4" />Generate Invite Link</>
+                }
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -401,7 +442,11 @@ export default function Monitors() {
               </button>
             </div>
             <p className="text-game-muted text-sm">
-              Share this link with your monitor. It expires in <span className="text-white font-medium">48 hours</span> and can only be used once.
+              Share this link with your monitor. It expires in{' '}
+              <span className="text-white font-medium">
+                {inviteExpiry.value} {inviteExpiry.unit}
+              </span>{' '}
+              and can only be used once.
             </p>
             <div className="flex items-center gap-2 bg-game-bg border border-game-border rounded-lg px-3 py-2">
               <span className="text-blue-300 text-xs font-mono flex-1 break-all select-all">{inviteLink}</span>
