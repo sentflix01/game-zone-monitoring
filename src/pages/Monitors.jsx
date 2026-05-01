@@ -4,14 +4,15 @@ import { functions } from '@/lib/firebase';
 import { firestoreClient } from '@/api/firestoreClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
-import { UserPlus, Trash2, UserCog, Eye, EyeOff, Bell, X, ShieldAlert, Loader2 } from 'lucide-react';
+import { UserPlus, Trash2, UserCog, Eye, EyeOff, Bell, X, ShieldAlert, Loader2, Link2, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatDistanceToNow } from 'date-fns';
 import PageSkeleton from '@/components/PageSkeleton';
+import { serverTimestamp } from 'firebase/firestore';
 
 export default function Monitors() {
-  const { ownerId } = useAuth();
+  const { ownerId, user } = useAuth();
 
   const [monitors, setMonitors]         = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -28,6 +29,12 @@ export default function Monitors() {
   const [formError, setFormError]           = useState('');
   // Dual-role warning
   const [dualRoleWarning, setDualRoleWarning] = useState(null);
+
+  // Invite link
+  const [generatingInvite, setGeneratingInvite] = useState(false);
+  const [inviteLink, setInviteLink]             = useState('');
+  const [showInviteModal, setShowInviteModal]   = useState(false);
+  const [linkCopied, setLinkCopied]             = useState(false);
 
   // Notifications
   const [notifications, setNotifications] = useState([]);
@@ -75,6 +82,56 @@ export default function Monitors() {
 
   function functionUnavailableMessage() {
     return 'Monitor management is currently unavailable. Cloud Functions must be deployed and reachable.';
+  }
+
+  function generateCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  async function handleGenerateInvite() {
+    if (!ownerId) return;
+    setGeneratingInvite(true);
+    try {
+      const code = generateCode();
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours
+
+      await firestoreClient.createInvite(code, {
+        ownerId,
+        ownerDisplayName: user?.displayName || user?.email || 'Zone Owner',
+        ownerEmail: user?.email || '',
+        createdAt: serverTimestamp(),
+        expiresAt: expiresAt.toISOString(),
+        used: false,
+        usedBy: null,
+      });
+
+      const link = `${window.location.origin}/join?code=${code}`;
+      setInviteLink(link);
+      setShowInviteModal(true);
+      setLinkCopied(false);
+    } catch (err) {
+      console.error('[Monitors] generateInvite error:', err);
+      toast.error('Failed to generate invite link. Please try again.');
+    } finally {
+      setGeneratingInvite(false);
+    }
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setLinkCopied(true);
+      toast.success('Link copied!');
+      setTimeout(() => setLinkCopied(false), 3000);
+    } catch {
+      toast.error('Failed to copy. Please copy the link manually.');
+    }
   }
 
   async function handleCreate(e) {
@@ -294,24 +351,72 @@ export default function Monitors() {
 
       {/* Add Monitor button */}
       {!showForm && (
-        <Button
-          onClick={() => {
-            setShowForm(true);
-            setDualRoleWarning(null);
-            setFormError('');
-            // Reset all form fields when opening fresh
-            setEmail('');
-            setUsername('');
-            setPhone('');
-            setDisplayName('');
-            setPassword('');
-            setConfirmPassword('');
-          }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white"
-        >
-          <UserPlus className="w-4 h-4" />
-          Add Monitor
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={() => {
+              setShowForm(true);
+              setDualRoleWarning(null);
+              setFormError('');
+              // Reset all form fields when opening fresh
+              setEmail('');
+              setUsername('');
+              setPhone('');
+              setDisplayName('');
+              setPassword('');
+              setConfirmPassword('');
+            }}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Monitor
+          </Button>
+          <Button
+            onClick={handleGenerateInvite}
+            disabled={generatingInvite}
+            variant="outline"
+            className="flex items-center gap-2 border-game-border text-white hover:bg-white/10"
+          >
+            {generatingInvite
+              ? <><Loader2 className="w-4 h-4 animate-spin" />Generating…</>
+              : <><Link2 className="w-4 h-4" />Generate Invite Link</>
+            }
+          </Button>
+        </div>
+      )}
+
+      {/* Invite link modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md bg-game-surface border border-game-border rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-blue-400" />
+                Invite Link
+              </h3>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="text-game-muted hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-game-muted text-sm">
+              Share this link with your monitor. It expires in <span className="text-white font-medium">48 hours</span> and can only be used once.
+            </p>
+            <div className="flex items-center gap-2 bg-game-bg border border-game-border rounded-lg px-3 py-2">
+              <span className="text-blue-300 text-xs font-mono flex-1 break-all select-all">{inviteLink}</span>
+            </div>
+            <Button
+              onClick={handleCopyLink}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-2"
+            >
+              {linkCopied
+                ? <><Check className="w-4 h-4" />Copied!</>
+                : <><Copy className="w-4 h-4" />Copy Link</>
+              }
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Create form */}

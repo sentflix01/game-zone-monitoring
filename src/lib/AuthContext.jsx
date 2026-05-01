@@ -80,7 +80,10 @@ export const AuthProvider = ({ children }) => {
       // The user is the same person as last time — trust the cache immediately.
       if (_cache && _cache.uid === firebaseUser.uid) {
         setUser(firebaseUser);
-        // Role/ownerId already seeded from cache in useState — just confirm auth
+        // Explicitly re-set role and ownerId from cache (don't rely on useState initial value)
+        // This ensures RoleGuard and other role-dependent UI always has the correct value
+        setRoleState(_cache.role ?? 'owner');
+        setOwnerId(_cache.ownerId ?? firebaseUser.uid);
         setIsAuthenticated(true);
         setIsLoadingAuth(false);
         // Verify in background without blocking the UI
