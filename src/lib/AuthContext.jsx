@@ -103,11 +103,21 @@ export const AuthProvider = ({ children }) => {
 
         // ── Optimization 2: Parallelize monitor check + owner check ──
         // Run both Firestore reads simultaneously instead of sequentially.
+        // Skip getMonitorOwner for brand-new accounts (creationTime ≈ now)
+        const accountAgeMs = firebaseUser.metadata?.creationTime
+          ? Date.now() - new Date(firebaseUser.metadata.creationTime).getTime()
+          : Infinity;
+        const isNewAccount = accountAgeMs < 60_000; // less than 1 minute old
+
         const [monitorOwnerId, ownerExists] = await withTimeout(
-          Promise.all([
-            firestoreClient.getMonitorOwner(firebaseUser.uid),
-            firestoreClient.ownerExists(firebaseUser.uid),
-          ]),
+          isNewAccount
+            // New account: skip monitor check entirely, just check owner doc
+            ? Promise.all([Promise.resolve(null), firestoreClient.ownerExists(firebaseUser.uid)])
+            // Existing account: check both in parallel
+            : Promise.all([
+                firestoreClient.getMonitorOwner(firebaseUser.uid),
+                firestoreClient.ownerExists(firebaseUser.uid),
+              ]),
           AUTH_FETCH_TIMEOUT_MS,
           'Auth resolution timed out.'
         );
@@ -179,12 +189,17 @@ export const AuthProvider = ({ children }) => {
 
     try {
       if (auth.currentUser) {
+        // Synchronous fast path — Firebase already has the user in memory
         resolveUser(auth.currentUser);
       }
 
       unsubscribe = onAuthStateChanged(
         auth,
-        (firebaseUser) => resolveUser(firebaseUser),
+        (firebaseUser) => {
+          // Skip if we already resolved from currentUser (same uid)
+          if (auth.currentUser && firebaseUser?.uid === auth.currentUser.uid && !isLoadingAuth) return;
+          resolveUser(firebaseUser);
+        },
         (error) => {
           clearTimeout(safetyTimeout);
           setAuthError(error?.message || 'Auth state listener failed');

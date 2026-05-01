@@ -295,7 +295,18 @@ export default function Monitors() {
       {/* Add Monitor button */}
       {!showForm && (
         <Button
-          onClick={() => { setShowForm(true); setDualRoleWarning(null); setFormError(''); }}
+          onClick={() => {
+            setShowForm(true);
+            setDualRoleWarning(null);
+            setFormError('');
+            // Reset all form fields when opening fresh
+            setEmail('');
+            setUsername('');
+            setPhone('');
+            setDisplayName('');
+            setPassword('');
+            setConfirmPassword('');
+          }}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white"
         >
           <UserPlus className="w-4 h-4" />
@@ -327,13 +338,18 @@ export default function Monitors() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-game-muted text-sm">Email <span className="text-game-muted/60">(Optional)</span></label>
+            <label className="text-game-muted text-sm">
+              Email
+              <span className="text-red-400 ml-1">*</span>
+              <span className="text-game-muted/60 ml-1 text-xs">(required for login)</span>
+            </label>
             <Input
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setFormError(''); }}
               placeholder="monitor@example.com"
               className="bg-game-bg border-game-border text-white"
+              required
             />
           </div>
 
